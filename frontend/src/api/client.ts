@@ -26,6 +26,13 @@ const getApiBase = (): string => {
     const cleaned = envUrl.replace(/\/+$/, '');
     return cleaned.endsWith('/api') ? cleaned : `${cleaned}/api`;
   }
+
+  // If running in production on Vercel without a custom env var configured,
+  // target the live Render backend directly
+  if (typeof window !== 'undefined' && window.location && window.location.hostname.endsWith('vercel.app')) {
+    return 'https://agentguard-p14p.onrender.com/api';
+  }
+
   return '/api';
 };
 
@@ -41,19 +48,51 @@ class ApiClient {
 
     try {
       const response = await fetch(url, { ...options, headers });
+      const contentType = response.headers.get('content-type') || '';
+
       if (!response.ok) {
-        let errorData: any = {};
+        let errorMessage = `API request failed with status ${response.status} (${response.statusText || 'Error'})`;
         try {
-          errorData = await response.json();
+          if (contentType.includes('application/json')) {
+            const errorData = await response.json();
+            if (errorData?.message) {
+              errorMessage = errorData.message;
+            } else if (errorData?.detail) {
+              errorMessage = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+            }
+          } else {
+            const errorText = await response.text();
+            if (errorText.trim().startsWith('<')) {
+              errorMessage = `Server returned HTTP ${response.status} (${response.statusText}). Endpoint ${url} returned an HTML document.`;
+            } else if (errorText.trim()) {
+              errorMessage = errorText.slice(0, 200);
+            }
+          }
         } catch (_) {
-          errorData = { message: response.statusText };
+          // Fall back to status message
         }
-        throw new Error(errorData.message || `API request failed with status ${response.status}`);
+        throw new Error(errorMessage);
       }
+
       if (response.status === 204) {
         return {} as T;
       }
-      return await response.json();
+
+      const rawText = await response.text();
+      if (!rawText || !rawText.trim()) {
+        return {} as T;
+      }
+
+      try {
+        return JSON.parse(rawText) as T;
+      } catch (parseErr: any) {
+        if (rawText.trim().startsWith('<') || contentType.includes('text/html')) {
+          throw new Error(
+            `API endpoint ${url} returned an HTML page instead of JSON. Ensure your API URL is configured correctly and pointing to the backend service.`
+          );
+        }
+        throw new Error(`Failed to parse API response as JSON: ${parseErr.message}`);
+      }
     } catch (err: any) {
       console.error(`API Error on ${endpoint}:`, err);
       throw err;
