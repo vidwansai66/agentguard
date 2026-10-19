@@ -18,7 +18,18 @@ import {
   FrameworkCatalogItem
 } from '../types';
 
-const API_BASE = '/api';
+const getApiBase = (): string => {
+  const meta = import.meta as any;
+  const envUrl = (meta?.env?.VITE_API_URL || meta?.env?.VITE_API_BASE_URL || '').trim();
+
+  if (envUrl) {
+    const cleaned = envUrl.replace(/\/+$/, '');
+    return cleaned.endsWith('/api') ? cleaned : `${cleaned}/api`;
+  }
+  return '/api';
+};
+
+const API_BASE = getApiBase();
 
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

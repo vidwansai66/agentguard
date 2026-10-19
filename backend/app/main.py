@@ -62,3 +62,11 @@ def root():
         "docs": "/docs",
         "api": settings.API_V1_STR
     }
+
+@app.get("/health", tags=["Health & System"])
+def health():
+    return {
+        "status": "healthy",
+        "service": "AgentGuard API",
+        "version": settings.VERSION,
+    }
