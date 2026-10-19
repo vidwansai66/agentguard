@@ -11,15 +11,20 @@ All endpoints are served under the `/api` prefix. OpenAPI documentation is avail
 - `POST /api/system/reset-demo-data`: Resets historical runs and re-seeds the 11 baseline scenarios.
 
 ### Agents
-- `GET /api/agents`: Lists registered agents and their version strategies.
+- `GET /api/agents`: Lists registered agents, adapter types, version strategies, and observability levels.
 - `POST /api/agents`: Registers an agent adapter.
-- `GET /api/agents/{agent_id}`: Agent details, supported tools, and version history.
-- `PATCH /api/agents/{agent_id}`: Updates agent status or active version.
+- `POST /api/agents/custom`: Registers a new custom agent with Python or HTTP adapter contract and validated config.
+- `POST /api/agents/connect-existing`: Connects an already-built external AI agent via HTTP endpoint or Python SDK wrapper without rewriting the agent's code.
+- `POST /api/agents/validate-config`: Pre-validates adapter configuration against security, endpoint, and schema rules.
+- `POST /api/agents/{agent_id}/test-connection`: Executes handshake, connectivity test, and capability/observability verification.
+- `GET /api/agents/{agent_id}`: Agent details, declared capabilities, supported tools, observability level, and version history.
+- `PATCH /api/agents/{agent_id}`: Updates agent status (active/disabled), declared capabilities, or active version.
 - `GET /api/agents/{agent_id}/runs`: Historical runs executed on this agent.
 
 ### Scenarios
 - `GET /api/scenarios`: Lists scenarios with query filters (`failure_type`, `severity`, `search`).
 - `POST /api/scenarios`: Creates a scenario with validation.
+- `POST /api/scenarios/compatibility`: Compares an agent's declared capabilities against scenario requirements.
 - `GET /api/scenarios/{id}`: Retrieves scenario definition.
 - `PATCH /api/scenarios/{id}`: Updates scenario parameters and increments version.
 - `DELETE /api/scenarios/{id}`: Deletes a scenario.

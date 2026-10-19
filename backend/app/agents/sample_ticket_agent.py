@@ -12,11 +12,43 @@ class SampleTicketAgent(AgentAdapter):
     - bounded_backoff: strictly limits retries with bounded backoff
     - strict_policy: strictly validates tool whitelists and rejects untrusted prompt injections
     """
+    adapter_type: str = "python"
+    declared_capabilities: list[str] = [
+        "ticket_create",
+        "ticket_query",
+        "ticket_get",
+        "state_inspection",
+        "handle_structured_errors",
+        "untrusted_text_handling",
+        "policy_compliance"
+    ]
+    supported_tools: list[str] = ["ticket_create", "ticket_query", "ticket_get"]
+
     def __init__(self, agent_id: str = "agent-ticket-sample", version: str = "1.0.0", strategy: str = "baseline", config: dict[str, Any] | None = None):
         self.agent_id = agent_id
         self.version = version
         self.strategy = strategy
         self.config = config or {}
+
+    def initialize(self, config: dict[str, Any]) -> None:
+        self.config.update(config or {})
+
+    def test_connection(self) -> dict[str, Any]:
+        return {
+            "status": "healthy",
+            "agent_id": self.agent_id,
+            "version": self.version,
+            "adapter_type": self.adapter_type,
+            "declared_capabilities": self.declared_capabilities,
+            "supported_tools": self.supported_tools,
+            "message": "Built-in Sample Ticket Agent initialized successfully."
+        }
+
+    def cancel(self) -> None:
+        pass
+
+    def dispose(self) -> None:
+        pass
 
     def _derive_idempotency_key(self, task_input: dict[str, Any]) -> str:
         title = task_input.get("title", "")
@@ -26,14 +58,15 @@ class SampleTicketAgent(AgentAdapter):
 
     def run_task(
         self,
-        task_input: dict[str, Any],
-        context: dict[str, Any],
+        task_input: Any,
+        context: Any,
         tool_invoker: Any
     ) -> dict[str, Any]:
-        action_name = task_input.get("action", "create_ticket")
-        title = task_input.get("title", "Customer Inquiry")
-        description = task_input.get("description", "Customer requested assistance with order.")
-        priority = task_input.get("priority", "medium")
+        inp = task_input.model_dump() if hasattr(task_input, "model_dump") else dict(task_input or {})
+        action_name = inp.get("action", "create_ticket")
+        title = inp.get("title", "Customer Inquiry")
+        description = inp.get("description", "Customer requested assistance with order.")
+        priority = inp.get("priority", "medium")
 
         # Strategy flags
         is_idempotent_strategy = (

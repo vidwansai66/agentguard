@@ -6,6 +6,7 @@ from app.tracing.recorder import TraceRecorder
 from app.tools.mock_ticketing import MockTicketingTool
 from app.agents.registry import agent_registry
 from app.evaluation.evaluator import Evaluator
+from app.tracing.sanitizer import sanitize_text
 
 class ToolInvoker:
     def __init__(
@@ -141,7 +142,9 @@ class ScenarioRunner:
         agent_version: str = "1.0.0",
         agent_strategy: str = "baseline",
         custom_config: dict[str, Any] | None = None,
-        run_id: str | None = None
+        run_id: str | None = None,
+        adapter_type: str = "python",
+        agent_adapter_config: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         run_id = run_id or f"RUN-{uuid.uuid4().hex[:10]}"
         scenario_result_id = f"RES-{uuid.uuid4().hex[:10]}"
@@ -152,6 +155,11 @@ class ScenarioRunner:
         max_steps = execution_limits.get("max_steps", 20)
 
         context: dict[str, Any] = {
+            "run_id": run_id,
+            "scenario_result_id": scenario_result_id,
+            "scenario_id": scenario_id,
+            "agent_id": agent_id,
+            "agent_version": agent_version,
             "tool_state": {
                 "tickets": [],
                 "call_history": []
@@ -173,12 +181,146 @@ class ScenarioRunner:
             allowed_tools=allowed_tools
         )
 
+        # Merge adapter configuration
+        effective_cfg = dict(agent_adapter_config or {})
+        if custom_config:
+            effective_cfg.update(custom_config)
+
         agent = agent_registry.get_agent(
             agent_id=agent_id,
             version=agent_version,
             strategy=agent_strategy,
-            config=custom_config or {}
+            config=effective_cfg,
+            adapter_type=adapter_type
         )
+
+        # Check scenario capability requirements against agent declared capabilities
+        required_caps = scenario_data.get("required_capabilities") or []
+        if agent_adapter_config and "declared_capabilities" in agent_adapter_config:
+            declared_caps = set(agent_adapter_config["declared_capabilities"] or [])
+            agent.declared_capabilities = list(declared_caps)
+        else:
+            declared_caps = set(agent.declared_capabilities or [])
+
+        missing_caps = [c for c in required_caps if c not in declared_caps]
+
+        if missing_caps:
+            explanation = f"Agent '{agent_id}' lacks required capabilities for scenario '{scenario_id}': {missing_caps}."
+            recorder.record_event(
+                step_index=1,
+                event_type="capability_check",
+                action_name="check_compatibility",
+                severity="warning",
+                input_data={"required_capabilities": required_caps, "declared_capabilities": list(declared_caps)},
+                output_data={"missing_capabilities": missing_caps, "compatible": False},
+                error_message=explanation
+            )
+            result_dict = {
+                "id": scenario_result_id,
+                "run_id": run_id,
+                "scenario_id": scenario_id,
+                "scenario_name": scenario_data.get("name", "Unnamed Scenario"),
+                "scenario_version": scenario_data.get("version", 1),
+                "failure_type": scenario_data.get("failure_type", "normal_execution"),
+                "status": "unsupported",
+                "passed": False,
+                "disrupted": False,
+                "recovered": False,
+                "has_unsafe_side_effect": False,
+                "duration_ms": 1.0,
+                "retry_count": 0,
+                "step_count": 0,
+                "error_message": explanation,
+                "execution_output": {
+                    "status": "unsupported",
+                    "unsupported_capabilities": missing_caps,
+                    "explanation": explanation
+                },
+                "scenario_snapshot": scenario_data,
+                "findings": [
+                    {
+                        "rule_id": "ASSERT_CAPABILITY_SUPPORT",
+                        "rule_name": "Agent Scenario Capability Compatibility",
+                        "status": "failed",
+                        "severity": "high",
+                        "message": f"Agent lacks required capabilities: {', '.join(missing_caps)}",
+                        "explanation": explanation,
+                        "trace_event_ids": [],
+                        "evidence": {"missing_capabilities": missing_caps, "required": required_caps, "declared": list(declared_caps)}
+                    }
+                ],
+                "trace_events": recorder.get_events()
+            }
+            try:
+                agent.dispose()
+            except Exception:
+                pass
+            return result_dict
+
+        # Check Observability Level requirement
+        agent_obs_level = getattr(agent, "observability_level", None) or (agent_adapter_config.get("observability_level") if agent_adapter_config else None) or "level_3_instrumented_tools"
+        scenario_failure_type = scenario_data.get("failure_type", "normal_execution")
+        requires_tool_faults = scenario_failure_type in [
+            "ambiguous_outcome", "transient_timeout", "repeated_action", "malformed_output", "policy_violation"
+        ]
+
+        if requires_tool_faults and agent_obs_level == "level_1_result_only":
+            explanation = (
+                f"Scenario '{scenario_id}' requires Level 3 (Instrumented Tools) to intercept and inject tool-level faults "
+                f"('{scenario_failure_type}'), but agent '{agent_id}' is configured with Level 1 (Result-Only) observability."
+            )
+            recorder.record_event(
+                step_index=1,
+                event_type="observability_check",
+                action_name="check_observability_compatibility",
+                severity="warning",
+                input_data={"required_level": "level_3_instrumented_tools", "agent_level": agent_obs_level, "failure_type": scenario_failure_type},
+                output_data={"compatible": False, "reason": explanation},
+                error_message=explanation
+            )
+            result_dict = {
+                "id": scenario_result_id,
+                "run_id": run_id,
+                "scenario_id": scenario_id,
+                "scenario_name": scenario_data.get("name", "Unnamed Scenario"),
+                "scenario_version": scenario_data.get("version", 1),
+                "failure_type": scenario_failure_type,
+                "status": "unsupported",
+                "passed": False,
+                "disrupted": False,
+                "recovered": False,
+                "has_unsafe_side_effect": False,
+                "duration_ms": 1.0,
+                "retry_count": 0,
+                "step_count": 0,
+                "error_message": explanation,
+                "execution_output": {
+                    "status": "unsupported",
+                    "unsupported_reason": "insufficient_observability_level",
+                    "required_observability_level": "level_3_instrumented_tools",
+                    "agent_observability_level": agent_obs_level,
+                    "explanation": explanation
+                },
+                "scenario_snapshot": scenario_data,
+                "findings": [
+                    {
+                        "rule_id": "ASSERT_OBSERVABILITY_COMPATIBILITY",
+                        "rule_name": "Observability Level Scenario Compatibility",
+                        "status": "failed",
+                        "severity": "high",
+                        "message": f"Scenario requires Level 3 Instrumented Tools, but agent provides {agent_obs_level}",
+                        "explanation": explanation,
+                        "trace_event_ids": [],
+                        "evidence": {"required_level": "level_3_instrumented_tools", "agent_level": agent_obs_level, "failure_type": scenario_failure_type}
+                    }
+                ],
+                "trace_events": recorder.get_events()
+            }
+            try:
+                agent.dispose()
+            except Exception:
+                pass
+            return result_dict
 
         start_time = time.perf_counter()
         agent_output = {}
@@ -190,6 +332,8 @@ class ScenarioRunner:
                 context=context,
                 tool_invoker=tool_invoker
             )
+            if hasattr(agent_output, "model_dump"):
+                agent_output = agent_output.model_dump()
         except Exception as e:
             error_message = str(e)
             agent_output = {
@@ -204,6 +348,11 @@ class ScenarioRunner:
                 severity="critical",
                 error_message=error_message
             )
+        finally:
+            try:
+                agent.dispose()
+            except Exception:
+                pass
 
         duration_ms = (time.perf_counter() - start_time) * 1000
 
@@ -243,7 +392,7 @@ class ScenarioRunner:
             "duration_ms": round(duration_ms, 2),
             "retry_count": agent_output.get("retries_used", 0),
             "step_count": tool_invoker.current_step,
-            "error_message": error_message or agent_output.get("error"),
+            "error_message": sanitize_text(error_message or agent_output.get("error")),
             "execution_output": agent_output,
             "scenario_snapshot": scenario_data,
             "findings": [

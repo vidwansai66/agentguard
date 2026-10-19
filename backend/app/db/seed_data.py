@@ -374,6 +374,18 @@ DEMO_SCENARIOS = [
     }
 ]
 
+def get_default_required_capabilities(failure_type: str) -> list[str]:
+    mapping = {
+        "ambiguous_outcome": ["ticket_create", "ticket_query", "state_inspection"],
+        "transient_timeout": ["ticket_create", "handle_structured_errors"],
+        "malformed_output": ["ticket_query", "handle_structured_errors"],
+        "prompt_injection": ["ticket_create", "untrusted_text_handling"],
+        "policy_violation": ["ticket_create", "policy_compliance"],
+        "repeated_action": ["ticket_create"],
+        "normal_execution": ["ticket_create"],
+    }
+    return mapping.get(failure_type, ["ticket_create"])
+
 def seed_database(db: Session):
     # 1. Seed Built-In Agent
     agent = db.query(Agent).filter(Agent.id == "agent-ticket-sample").first()
@@ -383,9 +395,17 @@ def seed_database(db: Session):
             name="Customer Support Ticketing Agent",
             description="Built-in sample Python agent that performs customer ticket creation and state reconciliation.",
             agent_type="python_mock_agent",
+            adapter_type="python",
+            registration_source="built_in",
             status="active",
             current_version="1.0.0",
             supported_tools_json=json.dumps(["ticket_create", "ticket_query", "ticket_get"]),
+            declared_capabilities_json=json.dumps([
+                "ticket_create", "ticket_query", "ticket_get",
+                "state_inspection", "handle_structured_errors",
+                "untrusted_text_handling", "policy_compliance"
+            ]),
+            adapter_config_json=json.dumps({"class_name": "SampleTicketAgent"}),
             config_schema_json=json.dumps({
                 "enable_idempotency_check": {"type": "boolean", "default": False},
                 "enable_strict_policy": {"type": "boolean", "default": False},
@@ -415,10 +435,69 @@ def seed_database(db: Session):
             is_candidate=True
         )
         db.add_all([v1, v2])
+    else:
+        # Ensure new adapter columns are set
+        if not agent.declared_capabilities:
+            agent.declared_capabilities = [
+                "ticket_create", "ticket_query", "ticket_get",
+                "state_inspection", "handle_structured_errors",
+                "untrusted_text_handling", "policy_compliance"
+            ]
+        if not agent.adapter_config:
+            agent.adapter_config = {"class_name": "SampleTicketAgent"}
+        if not agent.adapter_type:
+            agent.adapter_type = "python"
+        if not agent.registration_source:
+            agent.registration_source = "built_in"
+
+    # Seed Custom Python Agent for Out-of-the-Box Multi-Agent Testing
+    custom_agent = db.query(Agent).filter(Agent.id == "agent-custom-order").first()
+    if not custom_agent:
+        custom_agent = Agent(
+            id="agent-custom-order",
+            name="Enterprise Order Dispatcher Agent",
+            description="Trusted Python custom agent implementing AgentAdapter contract with bounded retries and idempotency checks.",
+            agent_type="python_custom_agent",
+            adapter_type="python",
+            registration_source="custom",
+            status="active",
+            current_version="1.0.0",
+            supported_tools_json=json.dumps(["ticket_create", "ticket_query", "ticket_get"]),
+            declared_capabilities_json=json.dumps([
+                "ticket_create", "ticket_query", "ticket_get",
+                "state_inspection", "handle_structured_errors", "policy_compliance"
+            ]),
+            adapter_config_json=json.dumps({
+                "class_name": "CustomTestAgent",
+                "enable_reconciliation": True,
+                "max_retries": 2
+            }),
+            config_schema_json=json.dumps({})
+        )
+        db.add(custom_agent)
+        db.flush()
+
+        v_custom = AgentVersion(
+            id="ver-agent-custom-order-100",
+            agent_id="agent-custom-order",
+            version_tag="1.0.0",
+            strategy="baseline",
+            config_json=json.dumps({
+                "class_name": "CustomTestAgent",
+                "enable_reconciliation": True,
+                "max_retries": 2
+            }),
+            description="Production-ready custom Python agent baseline",
+            is_candidate=False
+        )
+        db.add(v_custom)
+
+    db.commit()
 
     # 2. Seed Scenarios
     for scen_data in DEMO_SCENARIOS:
         existing = db.query(Scenario).filter(Scenario.id == scen_data["id"]).first()
+        req_caps = scen_data.get("required_capabilities") or get_default_required_capabilities(scen_data["failure_type"])
         if not existing:
             scen = Scenario(
                 id=scen_data["id"],
@@ -436,7 +515,8 @@ def seed_database(db: Session):
                 allowed_tools_json=json.dumps(scen_data["allowed_tools"]),
                 policy_constraints_json=json.dumps(scen_data["policy_constraints"]),
                 execution_limits_json=json.dumps(scen_data["execution_limits"]),
-                expected_assertions_json=json.dumps(scen_data["expected_assertions"])
+                expected_assertions_json=json.dumps(scen_data["expected_assertions"]),
+                required_capabilities_json=json.dumps(req_caps)
             )
             db.add(scen)
             db.flush()
@@ -449,6 +529,11 @@ def seed_database(db: Session):
                 snapshot_json=json.dumps(scen.to_dict())
             )
             db.add(s_ver)
+        else:
+            if not existing.required_capabilities:
+                existing.required_capabilities = req_caps
+
+    db.commit()
 
     # 3. Seed Test Suites
     suites_def = [

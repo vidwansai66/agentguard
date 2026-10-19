@@ -35,12 +35,17 @@ AgentGuard is an AI Agent Reliability, Safety Testing & Verified Repair Platform
 +------------------+    +------------------+    +-------------------+
 ```
 
-### 1. AgentAdapter (`app/agents/`)
-Provides a clean boundary for agent task runners. The built-in `SampleTicketAgent` executes customer ticketing tasks using mock tools and configurable recovery policies:
-- `baseline`: Naive blind retry on error or timeout; susceptibility to prompt injection and malformed outputs.
-- `safe_idempotent`: Idempotency keys + state query reconciliation prior to blind re-invocation.
-- `bounded_backoff`: Strict retry budgets and bounded delay.
-- `strict_policy`: Strict tool allowlist enforcement and rejection of adversarial tool outputs.
+### 1. AgentAdapter Contract & Custom Integrations (`app/adapters/`, `app/agents/`)
+Provides a clean, typed interface (`AgentAdapter`) isolating agent-specific logic from the generic runner, fault injector, trace recorder, and deterministic evaluator:
+- **Mode A (Python Adapter)**: For trusted in-process agents implemented in Python. Must implement `initialize()`, `run_task()`, `test_connection()`, and `dispose()`. Registered via application code or installed modules; arbitrary script execution/upload is strictly disallowed.
+- **Mode B (HTTP Adapter)**: For testing external agent microservices over HTTP/HTTPS. Enforces strict SSRF validation (blocking cloud metadata `169.254.169.254`, multicast, link-local), configurable connect/read timeouts, TLS verification, and environment-based secret references.
+- **Tool Interception**: External and custom agents invoke approved tools through `ToolInvoker`, ensuring 100% of tool interactions pass through fault injection, sanitization, and assertion evaluation.
+- **Capability Compatibility**: Scenarios declare `required_capabilities` (e.g. `state_inspection`, `handle_structured_errors`). Agents declare `declared_capabilities`. Missing capabilities are marked honestly as `unsupported` rather than falsely passing.
+- **Built-in Reference Agent (`SampleTicketAgent`)**: Remains available as the default ticketing reference with configurable strategies:
+  - `baseline`: Naive blind retry on error or timeout; susceptibility to prompt injection and malformed outputs.
+  - `safe_idempotent`: Idempotency keys + state query reconciliation prior to blind re-invocation.
+  - `bounded_backoff`: Strict retry budgets and bounded delay.
+  - `strict_policy`: Strict tool allowlist enforcement and rejection of adversarial tool outputs.
 
 ### 2. FaultInjector (`app/faults/`)
 Controlled fault simulation across 6 distinct failure categories:

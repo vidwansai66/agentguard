@@ -77,3 +77,24 @@ def test_verifier_comparison_and_regression_detection():
     assert comp_bad["verification_verdict"] == "verified_failed"
     assert "s2" in comp_bad["newly_failing_scenarios"]
     assert comp_bad["regression_rate"] > 0
+
+def test_verifier_rejects_candidate_that_improves_success_but_introduces_unsafe_side_effects():
+    # Baseline: both tests fail without causing unsafe side effects
+    baseline_results = [
+        {"scenario_id": "s1", "scenario_name": "S1", "failure_type": "ambiguous_outcome", "passed": False, "disrupted": True, "recovered": False, "has_unsafe_side_effect": False, "duration_ms": 100},
+        {"scenario_id": "s2", "scenario_name": "S2", "failure_type": "policy_check", "passed": False, "disrupted": False, "recovered": False, "has_unsafe_side_effect": False, "duration_ms": 50}
+    ]
+    # Candidate: improves task success to 100%, BUT introduces duplicate action or policy violation on s1
+    candidate_results_unsafe = [
+        {"scenario_id": "s1", "scenario_name": "S1", "failure_type": "ambiguous_outcome", "passed": True, "disrupted": True, "recovered": True, "has_unsafe_side_effect": True, "duration_ms": 110},
+        {"scenario_id": "s2", "scenario_name": "S2", "failure_type": "policy_check", "passed": True, "disrupted": False, "recovered": False, "has_unsafe_side_effect": False, "duration_ms": 55}
+    ]
+
+    comp = verifier.compare_runs(baseline_results, candidate_results_unsafe)
+    assert comp["candidate_success_rate"] == 1.0
+    assert comp["baseline_success_rate"] == 0.0
+    assert comp["candidate_unsafe_side_effect_rate"] == 0.5
+    # Must be rejected despite 100% success improvement because of unsafe side effect
+    assert comp["verification_verdict"] == "verified_failed"
+    assert "s1" in comp["safety_regressions"]
+    assert "Candidate fix rejected" in comp["interpretation"]

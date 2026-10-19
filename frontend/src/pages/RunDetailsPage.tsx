@@ -109,9 +109,22 @@ export const RunDetailsPage: React.FC = () => {
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to All Runs</span>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-white">{run.name}</h1>
             <StatusBadge status={run.status} />
+            <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase ${
+              run.observability_level === 'level_1_result_only'
+                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                : run.observability_level === 'level_2_structured_events'
+                ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+            }`}>
+              {run.observability_level === 'level_1_result_only'
+                ? 'Level 1: Result-Only'
+                : run.observability_level === 'level_2_structured_events'
+                ? 'Level 2: Structured-Events'
+                : 'Level 3: Instrumented'}
+            </span>
           </div>
           <p className="text-xs text-slate-400 font-mono mt-1">
             Run ID: {run.id} | Agent: {run.agent_id} ({run.agent_version})

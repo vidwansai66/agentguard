@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from typing import Any
 from sqlalchemy.orm import Session
+# pyrefly: ignore[missing-import]
 from app.models.agent import Agent, AgentVersion
 from app.models.scenario import Scenario
 from app.models.suite import TestSuite, SuiteScenario
@@ -65,6 +66,7 @@ class RunService:
         # 3. Create TestRun record
         run_id = f"RUN-{uuid.uuid4().hex[:10]}"
         default_name = f"Run {agent_version} on {suite_id or (scenarios[0].name if len(scenarios) == 1 else 'All Scenarios')}"
+        agent_obs_level = getattr(agent, "observability_level", "level_3_instrumented_tools")
         test_run = TestRun(
             id=run_id,
             name=run_name or default_name,
@@ -73,6 +75,7 @@ class RunService:
             suite_id=suite_id,
             scenario_id=scenario_id,
             status="running",
+            observability_level=agent_obs_level,
             trigger_type=trigger_type,
             total_scenarios=len(scenarios),
             passed_scenarios=0,
@@ -84,6 +87,7 @@ class RunService:
             config_snapshot_json=json.dumps({
                 "agent_strategy": agent_strategy,
                 "agent_config": agent_cfg,
+                "observability_level": agent_obs_level,
                 "scenario_ids": [s.id for s in scenarios]
             }),
             started_at=datetime.utcnow()
@@ -96,14 +100,28 @@ class RunService:
         # 4. Execute Scenarios sequentially
         try:
             for scen in scenarios:
+                # Check if run was cancelled mid-flight
+                db.refresh(test_run)
+                if test_run.status == "cancelled":
+                    break
+
                 scen_dict = scen.to_dict()
+                adapter_cfg = dict(getattr(agent, "adapter_config", {}) or {})
+                adapter_cfg["observability_level"] = agent_obs_level
+                if agent.declared_capabilities is not None:
+                    adapter_cfg["declared_capabilities"] = agent.declared_capabilities
+                if agent.supported_tools is not None:
+                    adapter_cfg["supported_tools"] = agent.supported_tools
+
                 result = scenario_runner.run_scenario(
                     scenario_data=scen_dict,
                     agent_id=agent_id,
                     agent_version=agent_version,
                     agent_strategy=agent_strategy,
                     custom_config=agent_cfg,
-                    run_id=run_id
+                    run_id=run_id,
+                    adapter_type=getattr(agent, "adapter_type", "python"),
+                    agent_adapter_config=adapter_cfg
                 )
 
                 total_run_duration += result["duration_ms"]
@@ -171,7 +189,9 @@ class RunService:
                     db.add(eval_fnd)
 
                 # Update aggregate counts
-                if result["passed"]:
+                if result["status"] == "unsupported":
+                    test_run.unsupported_scenarios += 1
+                elif result["passed"]:
                     test_run.passed_scenarios += 1
                 else:
                     test_run.failed_scenarios += 1
@@ -185,7 +205,8 @@ class RunService:
                 if result["recovered"]:
                     test_run.recovered_count += 1
 
-            test_run.status = "completed"
+            if test_run.status != "cancelled":
+                test_run.status = "completed"
             test_run.total_duration_ms = round(total_run_duration, 2)
             test_run.completed_at = datetime.utcnow()
             db.commit()

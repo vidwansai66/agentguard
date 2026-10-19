@@ -48,3 +48,50 @@ def test_trace_redaction_sanitizer():
     assert sanitized["token"] == "[REDACTED_SECRET]"
     assert "[REDACTED_SECRET]" in sanitized["user_note"]
     assert sanitized["safe_field"] == "public_data"
+
+def test_nested_trace_redaction_and_exception_sanitization():
+    from app.tracing.sanitizer import sanitize_text, sanitize_dict
+    from app.tracing.recorder import TraceRecorder
+
+    # 1. Deeply nested dictionaries and lists
+    nested_payload = {
+        "outer": {
+            "services": [
+                {"service_name": "auth", "secret_key": "sk-abcdef1234567890abcdef123456"},
+                {"service_name": "payment", "card_number": "4111 2222 3333 4444"}
+            ],
+            "credentials": {
+                "admin_password": "supersecretpassword123",
+                "nested_tokens": ["token1", "token2"],
+                "user_records": ["Bearer token123456789", "normal_string"]
+            }
+        }
+    }
+
+    sanitized = sanitize_dict(nested_payload)
+    services = sanitized["outer"]["services"]
+    assert services[0]["secret_key"] == "[REDACTED_SECRET]"
+    assert "[REDACTED_SECRET]" in services[1]["card_number"]
+    assert sanitized["outer"]["credentials"]["admin_password"] == "[REDACTED_SECRET]"
+    # Sensitive key list is completely redacted
+    assert sanitized["outer"]["credentials"]["nested_tokens"] == "[REDACTED_SECRET]"
+    # Normal key list sanitizes sensitive elements individually
+    assert "[REDACTED_SECRET]" in sanitized["outer"]["credentials"]["user_records"][0]
+    assert sanitized["outer"]["credentials"]["user_records"][1] == "normal_string"
+
+    # 2. Exception message sanitization
+    raw_error = "Connection failed to https://api.service.com with password=mySecretPass! and api_key=sk-99887766554433221100"
+    cleaned_error = sanitize_text(raw_error)
+    assert "mySecretPass" not in cleaned_error
+    assert "sk-99887766554433221100" not in cleaned_error
+    assert "[REDACTED_SECRET]" in cleaned_error
+
+    # 3. Trace recorder sanitizes error messages
+    recorder = TraceRecorder(run_id="RUN-TEST", scenario_result_id="RES-TEST", scenario_id="SCEN-TEST")
+    event = recorder.record_event(
+        step_index=1,
+        event_type="error",
+        error_message="Fatal error with token: Bearer mySecretToken123"
+    )
+    assert "mySecretToken" not in event["error_message"]
+    assert "[REDACTED_SECRET]" in event["error_message"]

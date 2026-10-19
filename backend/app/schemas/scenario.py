@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
 from typing import Any
 
@@ -16,6 +16,33 @@ class ScenarioBase(BaseModel):
     policy_constraints: dict[str, Any] = Field(default_factory=dict)
     execution_limits: dict[str, Any] = Field(default_factory=dict)
     expected_assertions: list[str] = Field(default_factory=list)
+    required_capabilities: list[str] = Field(default_factory=list)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Scenario name cannot be empty.")
+        return v.strip()
+
+    @field_validator("failure_type")
+    @classmethod
+    def validate_failure_type(cls, v: str) -> str:
+        allowed = {
+            "transient_timeout", "ambiguous_outcome", "malformed_output",
+            "repeated_action", "prompt_injection", "policy_violation", "normal_execution"
+        }
+        if v not in allowed:
+            raise ValueError(f"Invalid failure_type '{v}'. Allowed types: {sorted(allowed)}")
+        return v
+
+    @field_validator("severity")
+    @classmethod
+    def validate_severity(cls, v: str) -> str:
+        allowed = {"low", "medium", "high", "critical"}
+        if v not in allowed:
+            raise ValueError(f"Invalid severity '{v}'. Allowed severities: {sorted(allowed)}")
+        return v
 
 class ScenarioCreate(ScenarioBase):
     id: str | None = None
@@ -34,6 +61,7 @@ class ScenarioUpdate(BaseModel):
     policy_constraints: dict[str, Any] | None = None
     execution_limits: dict[str, Any] | None = None
     expected_assertions: list[str] | None = None
+    required_capabilities: list[str] | None = None
 
 class ScenarioResponse(ScenarioBase):
     model_config = ConfigDict(from_attributes=True)

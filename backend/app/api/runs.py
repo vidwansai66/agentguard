@@ -64,6 +64,7 @@ def _to_run_response(run: TestRun) -> dict:
         "total_scenarios": run.total_scenarios,
         "passed_scenarios": run.passed_scenarios,
         "failed_scenarios": run.failed_scenarios,
+        "unsupported_scenarios": getattr(run, "unsupported_scenarios", 0),
         "unsafe_side_effects_count": run.unsafe_side_effects_count,
         "disrupted_count": run.disrupted_count,
         "recovered_count": run.recovered_count,

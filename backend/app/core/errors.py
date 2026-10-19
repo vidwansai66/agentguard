@@ -16,9 +16,10 @@ class NotFoundError(AgentGuardException):
 
 class ValidationError(AgentGuardException):
     def __init__(self, message: str, details: dict | None = None):
+        code = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
         super().__init__(
             message=message,
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=code,
             details=details
         )
 

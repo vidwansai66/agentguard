@@ -24,11 +24,23 @@ class Scenario(Base):
     policy_constraints_json: Mapped[str] = mapped_column(Text, default="{}")
     execution_limits_json: Mapped[str] = mapped_column(Text, default="{}")
     expected_assertions_json: Mapped[str] = mapped_column(Text, default="[]")
+    required_capabilities_json: Mapped[str] = mapped_column(Text, default="[]")
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     versions = relationship("ScenarioVersion", back_populates="scenario", cascade="all, delete-orphan")
+
+    @property
+    def required_capabilities(self) -> list:
+        try:
+            return json.loads(self.required_capabilities_json or "[]")
+        except Exception:
+            return []
+
+    @required_capabilities.setter
+    def required_capabilities(self, val: list):
+        self.required_capabilities_json = json.dumps(val or [])
 
     def to_dict(self) -> dict:
         return {
@@ -48,6 +60,7 @@ class Scenario(Base):
             "policy_constraints": json.loads(self.policy_constraints_json or "{}"),
             "execution_limits": json.loads(self.execution_limits_json or "{}"),
             "expected_assertions": json.loads(self.expected_assertions_json or "[]"),
+            "required_capabilities": self.required_capabilities,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

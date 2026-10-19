@@ -13,10 +13,15 @@ import {
   ArrowRight,
   ShieldAlert,
   Sliders,
-  Terminal
+  Terminal,
+  ShieldCheck,
+  Ban,
+  Check,
+  Server,
+  Code
 } from 'lucide-react';
 import { api } from '../api/client';
-import { Agent, Scenario, TestSuite, TestRun } from '../types';
+import { Agent, Scenario, TestSuite, TestRun, CompatibilityResponse } from '../types';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 
@@ -36,6 +41,11 @@ export const RunExecutionPage: React.FC = () => {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('SCEN-03-AMBIGUOUS-OUTCOME');
   const [selectedSuiteId, setSelectedSuiteId] = useState<string>('suite-core-reliability');
   const [customName, setCustomName] = useState<string>('');
+  const [strictCompatibility, setStrictCompatibility] = useState<boolean>(true);
+
+  // Compatibility State
+  const [compatibility, setCompatibility] = useState<CompatibilityResponse | null>(null);
+  const [isCheckingCompat, setIsCheckingCompat] = useState<boolean>(false);
 
   // Execution State
   const [isExecuting, setIsExecuting] = useState(false);
@@ -60,8 +70,15 @@ export const RunExecutionPage: React.FC = () => {
       const qAgent = searchParams.get('agent_id');
       const qVer = searchParams.get('version');
 
-      if (qAgent) setSelectedAgentId(qAgent);
-      if (qVer) setSelectedVersion(qVer);
+      const initialAgentId = qAgent || (agentList.length > 0 ? agentList[0].id : 'agent-ticket-sample');
+      setSelectedAgentId(initialAgentId);
+
+      const ag = agentList.find((a) => a.id === initialAgentId);
+      if (qVer) {
+        setSelectedVersion(qVer);
+      } else if (ag?.current_version) {
+        setSelectedVersion(ag.current_version);
+      }
 
       if (qScen) {
         setRunTarget('scenario');
@@ -81,8 +98,35 @@ export const RunExecutionPage: React.FC = () => {
     initData();
   }, []);
 
+  // Check compatibility whenever selection changes
+  useEffect(() => {
+    const checkCompat = async () => {
+      if (!selectedAgentId) return;
+      try {
+        setIsCheckingCompat(true);
+        const scenarioIds = runTarget === 'scenario' ? [selectedScenarioId] : [];
+        const suiteId = runTarget === 'suite' ? selectedSuiteId : undefined;
+        const res = await api.checkScenarioCompatibility(selectedAgentId, scenarioIds, suiteId);
+        setCompatibility(res);
+      } catch (e) {
+        console.error('Compatibility check error', e);
+      } finally {
+        setIsCheckingCompat(false);
+      }
+    };
+
+    if (scenarios.length > 0 && agents.length > 0) {
+      checkCompat();
+    }
+  }, [selectedAgentId, selectedScenarioId, selectedSuiteId, runTarget, scenarios.length, agents.length]);
+
+  const selectedAgent = agents.find((a) => a.id === selectedAgentId);
+  const selectedScenario = scenarios.find((s) => s.id === selectedScenarioId);
+
+  const isBlocked = Boolean(strictCompatibility && compatibility && !compatibility.compatible);
+
   const handleExecute = async () => {
-    if (isExecuting) return;
+    if (isExecuting || isBlocked) return;
     try {
       setIsExecuting(true);
       setRunError(null);
@@ -108,8 +152,6 @@ export const RunExecutionPage: React.FC = () => {
       setIsExecuting(false);
     }
   };
-
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId);
 
   return (
     <div className="space-y-8">
@@ -138,18 +180,65 @@ export const RunExecutionPage: React.FC = () => {
               <select
                 value={selectedAgentId}
                 onChange={(e) => {
-                  setSelectedAgentId(e.target.value);
-                  const ag = agents.find((a) => a.id === e.target.value);
+                  const newId = e.target.value;
+                  setSelectedAgentId(newId);
+                  const ag = agents.find((a) => a.id === newId);
                   if (ag?.current_version) setSelectedVersion(ag.current_version);
                 }}
                 className="w-full bg-dark-bg border border-dark-border rounded-lg px-3 py-2 text-slate-200 focus:outline-none"
               >
                 {agents.map((ag) => (
                   <option key={ag.id} value={ag.id}>
-                    {ag.name} ({ag.id})
+                    {ag.name} ({ag.adapter_type || 'python'} adapter)
                   </option>
                 ))}
               </select>
+
+              {/* Agent Capability Preview Pills */}
+              {selectedAgent && (
+                <div className="mt-2.5 p-2.5 rounded-lg bg-dark-bg/80 border border-dark-border/80 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                    <span className="flex items-center gap-1">
+                      {selectedAgent.adapter_type === 'http' ? (
+                        <Server className="w-3 h-3 text-amber-400" />
+                      ) : (
+                        <Code className="w-3 h-3 text-sky-400" />
+                      )}
+                      <span className="capitalize">{selectedAgent.adapter_type || 'python'} Adapter</span>
+                    </span>
+                    <span className="capitalize">{selectedAgent.registration_source || 'built_in'}</span>
+                  </div>
+
+                  {/* Observability Level Badge */}
+                  <div className="pt-1 flex items-center justify-between text-[10px] font-mono">
+                    <span className="text-slate-400">Observability:</span>
+                    <span className={`px-1.5 py-0.5 rounded font-semibold uppercase ${
+                      selectedAgent.observability_level === 'level_1_result_only'
+                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                        : selectedAgent.observability_level === 'level_2_structured_events'
+                        ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                    }`}>
+                      {selectedAgent.observability_level === 'level_1_result_only'
+                        ? 'Level 1: Result-Only'
+                        : selectedAgent.observability_level === 'level_2_structured_events'
+                        ? 'Level 2: Structured-Events'
+                        : 'Level 3: Instrumented'}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {(selectedAgent.declared_capabilities || ['ticket_create', 'ticket_query', 'ticket_get']).map((c) => (
+                      <span
+                        key={c}
+                        className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-sky-950/60 text-sky-300 border border-sky-800/60"
+                      >
+                        {c}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Version Selector */}
@@ -218,6 +307,16 @@ export const RunExecutionPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+
+                {/* Scenario Required Capabilities */}
+                {selectedScenario && (
+                  <div className="mt-2 text-[11px] text-slate-400 flex items-center gap-1 font-mono">
+                    <span className="text-slate-500">Requires:</span>
+                    <span className="text-slate-300">
+                      {(selectedScenario.required_capabilities || ['ticket_create']).join(', ')}
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               <div>
@@ -239,6 +338,62 @@ export const RunExecutionPage: React.FC = () => {
               </div>
             )}
 
+            {/* Live Scenario Capability Compatibility Card */}
+            {compatibility && (
+              <div
+                className={`p-3 rounded-xl border text-xs transition-all ${
+                  compatibility.compatible
+                    ? 'bg-emerald-950/20 border-emerald-800/60 text-emerald-300'
+                    : 'bg-rose-950/30 border-rose-800/80 text-rose-300'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  {compatibility.compatible ? (
+                    <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <Ban className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="space-y-1.5 flex-1">
+                    <p className="font-semibold text-xs">
+                      {compatibility.compatible
+                        ? 'Agent Compatible With Scenario Requirements'
+                        : 'Compatibility Conflict Detected'}
+                    </p>
+                    {!compatibility.compatible && (
+                      <div className="text-[11px] space-y-1.5 opacity-90">
+                        {compatibility.scenarios
+                          .filter((s) => !s.compatible)
+                          .map((s) => (
+                            <div key={s.scenario_id} className="p-2 rounded bg-dark-bg/60 border border-rose-900/40 space-y-0.5">
+                              <p className="font-mono text-white font-semibold">{s.scenario_name}:</p>
+                              {s.missing_capabilities?.length > 0 && (
+                                <p className="text-rose-200">Missing capabilities: {s.missing_capabilities.join(', ')}</p>
+                              )}
+                              {s.observability_compatible === false && (
+                                <p className="text-amber-300">
+                                  Requires Level 3 Instrumented Tools for tool fault injection ('{s.failure_type}'), but agent provides {s.observability_level || 'Level 1 (Result-Only)'}.
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Strict Enforcement Toggle */}
+            <div className="flex items-center justify-between p-2 rounded-lg bg-dark-bg/50 border border-dark-border text-[11px]">
+              <span className="text-slate-300">Disable run when capabilities missing</span>
+              <input
+                type="checkbox"
+                checked={strictCompatibility}
+                onChange={(e) => setStrictCompatibility(e.target.checked)}
+                className="rounded border-slate-700 text-brand-600 focus:ring-0"
+              />
+            </div>
+
             {/* Custom Run Name (Optional) */}
             <div>
               <label className="block text-slate-300 font-semibold mb-1">Run Label (Optional)</label>
@@ -252,16 +407,25 @@ export const RunExecutionPage: React.FC = () => {
             </div>
 
             {/* Launch Button */}
-            <div className="pt-3">
+            <div className="pt-2">
               <button
                 onClick={handleExecute}
-                disabled={isExecuting}
-                className="w-full py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-brand-600/25"
+                disabled={isExecuting || isBlocked}
+                className={`w-full py-2.5 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg ${
+                  isBlocked
+                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                    : 'bg-brand-600 hover:bg-brand-500 shadow-brand-600/25'
+                }`}
               >
                 {isExecuting ? (
                   <>
                     <Clock className="w-4 h-4 animate-spin text-white" />
                     <span>Executing Test Engine...</span>
+                  </>
+                ) : isBlocked ? (
+                  <>
+                    <Ban className="w-4 h-4 text-rose-400" />
+                    <span>Execution Blocked (Missing Capabilities)</span>
                   </>
                 ) : (
                   <>
@@ -325,6 +489,9 @@ export const RunExecutionPage: React.FC = () => {
                       </span>
                     </div>
                     <h2 className="text-base font-bold text-white">{currentRun.name}</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Agent: <span className="font-semibold text-slate-300">{currentRun.agent_id}</span> (v{currentRun.agent_version})
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -361,16 +528,16 @@ export const RunExecutionPage: React.FC = () => {
                   </div>
 
                   <div className="p-3 rounded-xl bg-dark-bg border border-dark-border text-center">
-                    <div className="text-xs text-slate-500 mb-0.5">Unsafe Side Effects</div>
-                    <div className="text-xl font-bold font-mono text-rose-400">
-                      {currentRun.unsafe_side_effects_count}
+                    <div className="text-xs text-slate-500 mb-0.5">Unsupported Scenarios</div>
+                    <div className="text-xl font-bold font-mono text-amber-400">
+                      {currentRun.unsupported_scenarios || 0}
                     </div>
                   </div>
 
                   <div className="p-3 rounded-xl bg-dark-bg border border-dark-border text-center">
-                    <div className="text-xs text-slate-500 mb-0.5">Recovered Runs</div>
-                    <div className="text-xl font-bold font-mono text-cyan-400">
-                      {currentRun.recovered_count} / {currentRun.disrupted_count || 0}
+                    <div className="text-xs text-slate-500 mb-0.5">Unsafe Side Effects</div>
+                    <div className="text-xl font-bold font-mono text-rose-400">
+                      {currentRun.unsafe_side_effects_count}
                     </div>
                   </div>
                 </div>
@@ -390,7 +557,9 @@ export const RunExecutionPage: React.FC = () => {
                     <div key={res.id} className="p-4 space-y-3 hover:bg-dark-hover/20 transition-colors">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div className="flex items-center gap-2.5">
-                          {res.passed ? (
+                          {res.status === 'unsupported' ? (
+                            <Ban className="w-4 h-4 text-amber-400 shrink-0" />
+                          ) : res.passed ? (
                             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                           ) : (
                             <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -407,6 +576,13 @@ export const RunExecutionPage: React.FC = () => {
                           <StatusBadge status={res.status} />
                         </div>
                       </div>
+
+                      {/* Error or Explanation if unsupported */}
+                      {res.error_message && (
+                        <p className="text-xs text-amber-300 bg-amber-950/20 p-2 rounded-lg border border-amber-900/40">
+                          {res.error_message}
+                        </p>
+                      )}
 
                       {/* Evaluator assertions findings */}
                       <div className="grid grid-cols-1 gap-2 pt-1">

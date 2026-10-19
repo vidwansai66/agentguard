@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Any
-from app.tracing.sanitizer import sanitize_dict
+from app.tracing.sanitizer import sanitize_dict, sanitize_text
 
 class TraceRecorder:
     def __init__(self, run_id: str, scenario_result_id: str, scenario_id: str):
@@ -40,7 +40,7 @@ class TraceRecorder:
             "fault_details": sanitize_dict(fault_details or {}),
             "retry_count": retry_count,
             "duration_ms": duration_ms,
-            "error_message": error_message,
+            "error_message": sanitize_text(error_message),
             "timestamp": datetime.utcnow()
         }
         self.events.append(event)

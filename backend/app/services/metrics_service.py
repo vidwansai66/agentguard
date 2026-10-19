@@ -5,12 +5,13 @@ from app.models.comparison import Comparison
 
 class MetricsService:
     def get_dashboard_metrics(self, db: Session) -> dict:
-        runs = db.query(TestRun).filter(TestRun.status == "completed").order_by(desc(TestRun.created_at)).all()
+        all_runs = db.query(TestRun).order_by(desc(TestRun.created_at)).all()
+        completed_runs = [r for r in all_runs if r.status == "completed"]
 
-        total_runs = len(runs)
-        if total_runs == 0:
+        total_runs = len(all_runs)
+        if total_runs == 0 or len(completed_runs) == 0:
             return {
-                "total_runs": 0,
+                "total_runs": total_runs,
                 "task_success_rate": 0.0,
                 "recovery_rate": 0.0,
                 "unsafe_side_effect_rate": 0.0,
@@ -24,16 +25,16 @@ class MetricsService:
                 "active_regressions_count": 0
             }
 
-        total_scenarios_all = sum(r.total_scenarios for r in runs)
-        passed_scenarios_all = sum(r.passed_scenarios for r in runs)
-        failed_scenarios_all = sum(r.failed_scenarios for r in runs)
-        unsafe_all = sum(r.unsafe_side_effects_count for r in runs)
-        disrupted_all = sum(r.disrupted_count for r in runs)
-        recovered_all = sum(r.recovered_count for r in runs)
+        total_scenarios_all = sum(r.total_scenarios for r in completed_runs)
+        passed_scenarios_all = sum(r.passed_scenarios for r in completed_runs)
+        failed_scenarios_all = sum(r.failed_scenarios for r in completed_runs)
+        unsafe_all = sum(r.unsafe_side_effects_count for r in completed_runs)
+        disrupted_all = sum(r.disrupted_count for r in completed_runs)
+        recovered_all = sum(r.recovered_count for r in completed_runs)
 
-        task_success_rate = round(passed_scenarios_all / (total_scenarios_all or 1), 4)
-        recovery_rate = round(recovered_all / (disrupted_all or 1), 4) if disrupted_all > 0 else 1.0
-        unsafe_rate = round(unsafe_all / (total_scenarios_all or 1), 4)
+        task_success_rate = round(passed_scenarios_all / total_scenarios_all, 4) if total_scenarios_all > 0 else 0.0
+        recovery_rate = round(recovered_all / disrupted_all, 4) if disrupted_all > 0 else 0.0
+        unsafe_rate = round(unsafe_all / total_scenarios_all, 4) if total_scenarios_all > 0 else 0.0
 
         # Compute latency percentiles across scenario results
         all_results = db.query(ScenarioResult).all()
@@ -65,9 +66,9 @@ class MetricsService:
             for ft, data in failure_type_map.items()
         ]
 
-        # Trend history (last 10 runs in chronological order)
+        # Trend history (last 10 completed runs in chronological order)
         trend_history = []
-        for r in reversed(runs[:10]):
+        for r in reversed(completed_runs[:10]):
             trend_history.append({
                 "run_id": r.id,
                 "run_name": r.name,
@@ -91,7 +92,7 @@ class MetricsService:
                 "duration_ms": r.total_duration_ms,
                 "created_at": r.created_at.isoformat() if r.created_at else None
             }
-            for r in runs[:10]
+            for r in all_runs[:10]
         ]
 
         # Active regressions count from latest comparisons

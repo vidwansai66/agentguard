@@ -9,18 +9,90 @@ export interface AgentVersion {
   created_at?: string;
 }
 
+export type ObservabilityLevel = 'level_1_result_only' | 'level_2_structured_events' | 'level_3_instrumented_tools';
+
 export interface Agent {
   id: string;
   name: string;
   description?: string;
   agent_type: string;
+  adapter_type?: 'python' | 'http' | 'python_sdk_wrapper';
+  registration_source?: 'built_in' | 'custom' | 'connected_existing';
   status: string;
+  observability_level?: ObservabilityLevel;
   current_version: string;
   supported_tools: string[];
+  declared_capabilities?: string[];
+  adapter_config?: Record<string, any>;
   created_at?: string;
   updated_at?: string;
   versions: AgentVersion[];
 }
+
+export interface HttpConnectionConfig {
+  base_url: string;
+  health_endpoint?: string;
+  invocation_endpoint?: string;
+  auth_type?: string;
+  auth_header_name?: string;
+  secret_env_var?: string;
+  connect_timeout_seconds?: number;
+  read_timeout_seconds?: number;
+  allow_local_dev?: boolean;
+  observability_level?: ObservabilityLevel;
+  event_format?: string;
+  request_mapping?: Record<string, any>;
+  response_mapping?: Record<string, any>;
+}
+
+export interface SdkWrapperConfig {
+  wrapper_type: string;
+  target_name?: string;
+  observability_level?: ObservabilityLevel;
+  input_parameter_name?: string;
+}
+
+export interface FrameworkConnectionConfig {
+  framework: string;
+  graph_target: string;
+  max_steps?: number;
+}
+
+export interface ModelBackedConnectionConfig {
+  provider: string;
+  model: string;
+  base_url: string;
+  secret_env_var: string;
+  request_timeout_seconds?: number;
+  max_model_calls?: number;
+  max_tool_calls?: number;
+  temperature?: number;
+  system_prompt?: string;
+}
+
+export interface FrameworkCatalogItem {
+  framework: string;
+  status: 'supported' | 'planned';
+  installed_version?: string;
+  description: string;
+  example_target?: string;
+}
+
+export interface ExistingAgentConnectRequest {
+  id: string;
+  name: string;
+  description?: string;
+  connection_method: 'http_endpoint' | 'python_sdk_wrapper' | 'agent_framework' | 'model_backed';
+  observability_level: ObservabilityLevel;
+  version: string;
+  supported_tools: string[];
+  declared_capabilities: string[];
+  http_config?: HttpConnectionConfig;
+  sdk_config?: SdkWrapperConfig;
+  framework_config?: FrameworkConnectionConfig;
+  llm_config?: ModelBackedConnectionConfig;
+}
+
 
 export interface Scenario {
   id: string;
@@ -39,6 +111,7 @@ export interface Scenario {
   policy_constraints: Record<string, any>;
   execution_limits: Record<string, any>;
   expected_assertions: string[];
+  required_capabilities?: string[];
   created_at?: string;
   updated_at?: string;
 }
@@ -96,7 +169,7 @@ export interface ScenarioResult {
   scenario_name: string;
   scenario_version: number;
   failure_type: string;
-  status: 'passed' | 'failed' | 'error' | 'cancelled';
+  status: 'passed' | 'failed' | 'unsupported' | 'error' | 'cancelled';
   passed: boolean;
   disrupted: boolean;
   recovered: boolean;
@@ -118,10 +191,12 @@ export interface TestRun {
   suite_id?: string;
   scenario_id?: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  observability_level?: ObservabilityLevel;
   trigger_type: string;
   total_scenarios: number;
   passed_scenarios: number;
   failed_scenarios: number;
+  unsupported_scenarios?: number;
   unsafe_side_effects_count: number;
   disrupted_count: number;
   recovered_count: number;
@@ -130,6 +205,56 @@ export interface TestRun {
   completed_at?: string;
   created_at?: string;
   scenario_results?: ScenarioResult[];
+}
+
+export interface CustomAgentRegisterPayload {
+  id: string;
+  name: string;
+  description?: string;
+  adapter_type: 'python' | 'http';
+  version: string;
+  strategy: string;
+  observability_level?: ObservabilityLevel;
+  supported_tools: string[];
+  declared_capabilities: string[];
+  adapter_config: Record<string, any>;
+}
+
+export interface ValidateConfigResponse {
+  valid: boolean;
+  error?: string;
+  adapter_type: string;
+  observability_level?: ObservabilityLevel;
+  details: Record<string, any>;
+}
+
+export interface TestConnectionResponse {
+  status: 'healthy' | 'warning' | 'error' | 'unconfigured';
+  message: string;
+  adapter_type: string;
+  observability_level?: ObservabilityLevel;
+  declared_capabilities: string[];
+  details: Record<string, any>;
+}
+
+export interface CompatibilityScenarioDetail {
+  scenario_id: string;
+  scenario_name: string;
+  failure_type?: string;
+  required_capabilities: string[];
+  missing_capabilities: string[];
+  observability_level?: ObservabilityLevel;
+  observability_compatible?: boolean;
+  compatible: boolean;
+  explanation: string;
+}
+
+export interface CompatibilityResponse {
+  agent_id: string;
+  observability_level?: ObservabilityLevel;
+  declared_capabilities: string[];
+  compatible: boolean;
+  scenarios: CompatibilityScenarioDetail[];
 }
 
 export interface Diagnosis {

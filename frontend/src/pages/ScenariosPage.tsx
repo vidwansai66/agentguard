@@ -111,13 +111,59 @@ export const ScenariosPage: React.FC = () => {
     if (!file) return;
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text);
-      const scenariosList = Array.isArray(parsed) ? parsed : (parsed.scenarios || []);
-      const res = await api.importScenarios(scenariosList);
-      alert(`Successfully imported ${res.imported_count} scenarios!`);
-      loadScenarios();
+      if (!text.trim()) {
+        alert('Import failed: The selected JSON file is empty.');
+        return;
+      }
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch (jsonErr: any) {
+        alert(`Import failed: Malformed JSON file (${jsonErr.message})`);
+        return;
+      }
+
+      // Format normalization: single scenario, scenario array, or export bundle
+      let payloadToSend: any = parsed;
+      if (Array.isArray(parsed)) {
+        if (parsed.length === 0) {
+          alert('Import failed: JSON file contains an empty array of scenarios.');
+          return;
+        }
+        payloadToSend = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.scenarios)) {
+          if (parsed.scenarios.length === 0) {
+            alert('Import failed: Export bundle contains 0 scenarios.');
+            return;
+          }
+          payloadToSend = parsed;
+        } else if (parsed.name || parsed.failure_type || parsed.id) {
+          // Single scenario object
+          payloadToSend = parsed;
+        } else {
+          alert('Import failed: Unsupported JSON format. Expected a scenario object, an array of scenarios, or an export bundle with a "scenarios" list.');
+          return;
+        }
+      } else {
+        alert('Import failed: Invalid JSON structure. Expected an object or array.');
+        return;
+      }
+
+      const res = await api.importScenarios(payloadToSend);
+      if (res.imported_count > 0) {
+        alert(`Successfully imported ${res.imported_count} scenario${res.imported_count === 1 ? '' : 's'}!`);
+        await loadScenarios();
+      } else {
+        alert('Import completed, but 0 scenarios were saved.');
+      }
     } catch (err: any) {
       alert(`Import failed: ${err.message}`);
+    } finally {
+      if (e.target) {
+        e.target.value = '';
+      }
     }
   };
 

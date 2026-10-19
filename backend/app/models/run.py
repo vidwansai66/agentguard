@@ -15,11 +15,13 @@ class TestRun(Base):
     scenario_id: Mapped[str] = mapped_column(String(64), nullable=True) # if single scenario run
 
     status: Mapped[str] = mapped_column(String(32), default="pending") # pending, running, completed, failed, cancelled
+    observability_level: Mapped[str] = mapped_column(String(32), default="level_3_instrumented_tools") # level_1_result_only, level_2_structured_events, level_3_instrumented_tools
     trigger_type: Mapped[str] = mapped_column(String(32), default="manual") # manual, verification, regression
 
     total_scenarios: Mapped[int] = mapped_column(Integer, default=0)
     passed_scenarios: Mapped[int] = mapped_column(Integer, default=0)
     failed_scenarios: Mapped[int] = mapped_column(Integer, default=0)
+    unsupported_scenarios: Mapped[int] = mapped_column(Integer, default=0)
     unsafe_side_effects_count: Mapped[int] = mapped_column(Integer, default=0)
     disrupted_count: Mapped[int] = mapped_column(Integer, default=0)
     recovered_count: Mapped[int] = mapped_column(Integer, default=0)

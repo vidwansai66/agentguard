@@ -1,6 +1,7 @@
 import uuid
 import json
-from fastapi import APIRouter, Depends, Query, status, Response
+from typing import Any
+from fastapi import APIRouter, Depends, Query, status, Response, Body
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.scenario import Scenario, ScenarioVersion
@@ -51,59 +52,117 @@ def export_scenarios(db: Session = Depends(get_db)):
     }
 
 @router.post("/import", response_model=ScenarioImportResponse)
-def import_scenarios(payload: ScenarioImportRequest, db: Session = Depends(get_db)):
-    imported_ids = []
-    for item in payload.scenarios:
-        scen_id = item.id or f"SCEN-{uuid.uuid4().hex[:8].upper()}"
-        existing = db.query(Scenario).filter(Scenario.id == scen_id).first()
-        if existing:
-            # Update existing
-            existing.name = item.name
-            existing.description = item.description
-            existing.category = item.category
-            existing.failure_type = item.failure_type
-            existing.severity = item.severity
-            existing.task_input_json = json.dumps(item.task_input)
-            existing.expected_outcome_json = json.dumps(item.expected_outcome)
-            existing.fault_parameters_json = json.dumps(item.fault_parameters)
-            existing.allowed_tools_json = json.dumps(item.allowed_tools)
-            existing.policy_constraints_json = json.dumps(item.policy_constraints)
-            existing.execution_limits_json = json.dumps(item.execution_limits)
-            existing.expected_assertions_json = json.dumps(item.expected_assertions)
-            existing.version += 1
-            imported_ids.append(existing.id)
-        else:
-            new_scen = Scenario(
-                id=scen_id,
-                name=item.name,
-                description=item.description,
-                category=item.category,
-                failure_type=item.failure_type,
-                severity=item.severity,
-                is_enabled=item.is_enabled,
-                is_seeded=False,
-                version=1,
-                task_input_json=json.dumps(item.task_input),
-                expected_outcome_json=json.dumps(item.expected_outcome),
-                fault_parameters_json=json.dumps(item.fault_parameters),
-                allowed_tools_json=json.dumps(item.allowed_tools),
-                policy_constraints_json=json.dumps(item.policy_constraints),
-                execution_limits_json=json.dumps(item.execution_limits),
-                expected_assertions_json=json.dumps(item.expected_assertions)
-            )
-            db.add(new_scen)
-            db.flush()
-            # Version snapshot
-            v = ScenarioVersion(
-                id=f"ver-{new_scen.id}-v1",
-                scenario_id=new_scen.id,
-                version_number=1,
-                snapshot_json=json.dumps(new_scen.to_dict())
-            )
-            db.add(v)
-            imported_ids.append(new_scen.id)
+def import_scenarios(payload: Any = Body(...), db: Session = Depends(get_db)):
+    if payload is None:
+        raise ValidationError("Import payload cannot be empty.")
 
-    db.commit()
+    # 1. Normalize payload into a list of raw scenario dicts
+    raw_list: list[Any] = []
+    if isinstance(payload, list):
+        raw_list = payload
+    elif isinstance(payload, dict):
+        if "scenarios" in payload:
+            scen_val = payload["scenarios"]
+            if not isinstance(scen_val, list):
+                raise ValidationError("Field 'scenarios' must be an array.")
+            raw_list = scen_val
+        elif "scenario" in payload:
+            scen_val = payload["scenario"]
+            if not isinstance(scen_val, dict):
+                raise ValidationError("Field 'scenario' must be an object.")
+            raw_list = [scen_val]
+        elif "name" in payload or "failure_type" in payload or "id" in payload:
+            raw_list = [payload]
+        else:
+            raise ValidationError(
+                "Unrecognized scenario import format. Expected a single scenario object, "
+                "an array of scenarios, or an object with a 'scenarios' list."
+            )
+    else:
+        raise ValidationError("Invalid import payload type. Expected a JSON object or array.")
+
+    if len(raw_list) == 0:
+        raise ValidationError("No scenarios found in import payload.")
+
+    # 2. Validate every scenario item before performing any database write
+    validated_scenarios: list[ScenarioCreate] = []
+    for idx, item in enumerate(raw_list):
+        if not isinstance(item, dict):
+            raise ValidationError(f"Scenario at index {idx} must be a JSON object, got {type(item).__name__}.")
+        try:
+            scen_obj = ScenarioCreate.model_validate(item)
+            validated_scenarios.append(scen_obj)
+        except Exception as e:
+            err_details = str(e)
+            raise ValidationError(f"Validation failed for scenario at index {idx} ({item.get('name', 'unnamed')}): {err_details}")
+
+    # 3. Transactional persistence
+    imported_ids = []
+    try:
+        for item in validated_scenarios:
+            scen_id = item.id or f"SCEN-{uuid.uuid4().hex[:8].upper()}"
+            existing = db.query(Scenario).filter(Scenario.id == scen_id).first()
+            if existing:
+                existing.name = item.name
+                existing.description = item.description
+                existing.category = item.category
+                existing.failure_type = item.failure_type
+                existing.severity = item.severity
+                existing.is_enabled = item.is_enabled
+                existing.task_input_json = json.dumps(item.task_input)
+                existing.expected_outcome_json = json.dumps(item.expected_outcome)
+                existing.fault_parameters_json = json.dumps(item.fault_parameters)
+                existing.allowed_tools_json = json.dumps(item.allowed_tools)
+                existing.policy_constraints_json = json.dumps(item.policy_constraints)
+                existing.execution_limits_json = json.dumps(item.execution_limits)
+                existing.expected_assertions_json = json.dumps(item.expected_assertions)
+                existing.version += 1
+                db.flush()
+
+                v = ScenarioVersion(
+                    id=f"ver-{existing.id}-v{existing.version}",
+                    scenario_id=existing.id,
+                    version_number=existing.version,
+                    snapshot_json=json.dumps(existing.to_dict())
+                )
+                db.add(v)
+                imported_ids.append(existing.id)
+            else:
+                new_scen = Scenario(
+                    id=scen_id,
+                    name=item.name,
+                    description=item.description,
+                    category=item.category,
+                    failure_type=item.failure_type,
+                    severity=item.severity,
+                    is_enabled=item.is_enabled,
+                    is_seeded=False,
+                    version=1,
+                    task_input_json=json.dumps(item.task_input),
+                    expected_outcome_json=json.dumps(item.expected_outcome),
+                    fault_parameters_json=json.dumps(item.fault_parameters),
+                    allowed_tools_json=json.dumps(item.allowed_tools),
+                    policy_constraints_json=json.dumps(item.policy_constraints),
+                    execution_limits_json=json.dumps(item.execution_limits),
+                    expected_assertions_json=json.dumps(item.expected_assertions)
+                )
+                db.add(new_scen)
+                db.flush()
+
+                v = ScenarioVersion(
+                    id=f"ver-{new_scen.id}-v1",
+                    scenario_id=new_scen.id,
+                    version_number=1,
+                    snapshot_json=json.dumps(new_scen.to_dict())
+                )
+                db.add(v)
+                imported_ids.append(new_scen.id)
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
     return ScenarioImportResponse(imported_count=len(imported_ids), scenario_ids=imported_ids)
 
 @router.post("", response_model=ScenarioResponse, status_code=status.HTTP_201_CREATED)
@@ -247,3 +306,76 @@ def duplicate_scenario(scenario_id: str, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(dup)
     return dup.to_dict()
+
+@router.post("/compatibility")
+def check_scenario_compatibility(
+    payload: dict[str, Any] = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Checks compatibility between an agent and target scenarios/suite based on declared vs required capabilities.
+    """
+    agent_id = payload.get("agent_id")
+    scenario_id = payload.get("scenario_id")
+    suite_id = payload.get("suite_id")
+    scenario_ids = list(payload.get("scenario_ids") or [])
+
+    if scenario_id and scenario_id not in scenario_ids:
+        scenario_ids.append(scenario_id)
+
+    from app.models.agent import Agent
+    from app.models.suite import TestSuite, SuiteScenario
+
+    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    if not agent:
+        raise NotFoundError("Agent", agent_id or "")
+
+    declared_caps = set(agent.declared_capabilities or [])
+
+    if suite_id and not scenario_ids:
+        suite_scens = db.query(SuiteScenario).filter(SuiteScenario.suite_id == suite_id).all()
+        scenario_ids = [s.scenario_id for s in suite_scens]
+
+    scenarios = db.query(Scenario).filter(Scenario.id.in_(scenario_ids)).all() if scenario_ids else []
+
+    agent_obs_level = getattr(agent, "observability_level", "level_3_instrumented_tools")
+
+    details = []
+    for scen in scenarios:
+        req_caps = scen.required_capabilities or []
+        missing = [c for c in req_caps if c not in declared_caps]
+
+        # Check observability level requirement
+        requires_tool_faults = scen.failure_type in [
+            "ambiguous_outcome", "transient_timeout", "repeated_action", "malformed_output", "policy_violation"
+        ]
+        obs_incompatible = requires_tool_faults and agent_obs_level == "level_1_result_only"
+
+        is_compatible = (len(missing) == 0) and not obs_incompatible
+        explanation_parts = []
+        if missing:
+            explanation_parts.append(f"Missing capabilities: {', '.join(missing)}")
+        if obs_incompatible:
+            explanation_parts.append(f"Requires Level 3 Instrumented Tools for tool fault injection ('{scen.failure_type}'), but agent provides Level 1 (Result-Only)")
+
+        details.append({
+            "scenario_id": scen.id,
+            "scenario_name": scen.name,
+            "failure_type": scen.failure_type,
+            "required_capabilities": req_caps,
+            "missing_capabilities": missing,
+            "observability_level": agent_obs_level,
+            "observability_compatible": not obs_incompatible,
+            "compatible": is_compatible,
+            "explanation": "; ".join(explanation_parts) if explanation_parts else "Fully compatible"
+        })
+
+    all_compatible = all(d["compatible"] for d in details) if details else True
+    return {
+        "agent_id": agent_id,
+        "observability_level": agent_obs_level,
+        "declared_capabilities": list(declared_caps),
+        "compatible": all_compatible,
+        "scenarios": details
+    }
+

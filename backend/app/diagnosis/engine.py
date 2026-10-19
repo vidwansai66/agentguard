@@ -40,7 +40,7 @@ class DiagnosisEngine:
         failure_type = scenario_result.get("failure_type", "")
 
         # 1. Duplicate side effect diagnosis
-        if "ASSERT_NO_DUPLICATE_ACTIONS" in failed_rules or scenario_result.get("has_unsafe_side_effect"):
+        if "ASSERT_NO_DUPLICATE_ACTIONS" in failed_rules or "ASSERT_SAFE_RECOVERY" in failed_rules or scenario_result.get("has_unsafe_side_effect"):
             duplicate_finding = failed_rules.get("ASSERT_NO_DUPLICATE_ACTIONS", {})
             evidence = duplicate_finding.get("evidence", {})
             trace_ids = duplicate_finding.get("trace_event_ids", [])

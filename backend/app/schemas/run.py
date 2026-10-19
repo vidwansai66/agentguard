@@ -73,10 +73,12 @@ class TestRunResponse(BaseModel):
     suite_id: str | None = None
     scenario_id: str | None = None
     status: str
+    observability_level: str = "level_3_instrumented_tools"
     trigger_type: str
     total_scenarios: int
     passed_scenarios: int
     failed_scenarios: int
+    unsupported_scenarios: int = 0
     unsafe_side_effects_count: int
     disrupted_count: int
     recovered_count: int

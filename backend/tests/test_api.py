@@ -100,3 +100,39 @@ def test_end_to_end_repair_and_verification_workflow(client):
     assert res_stats.status_code == 200
     stats = res_stats.json()
     assert stats["total_runs"] >= 2
+
+def test_suite_execution_and_scenarios_ordering(client):
+    res_suites = client.get("/api/suites")
+    assert res_suites.status_code == 200
+    suites = res_suites.json()
+    assert len(suites) > 0
+    target_suite = suites[0]
+
+    run_payload = {
+        "name": f"Suite Run: {target_suite['name']}",
+        "agent_id": "agent-ticket-sample",
+        "agent_version": "1.0.0",
+        "suite_id": target_suite["id"]
+    }
+    res_run = client.post("/api/runs", json=run_payload)
+    assert res_run.status_code == 201
+    run_data = res_run.json()
+    assert run_data["status"] == "completed"
+    assert run_data["total_scenarios"] == target_suite["scenario_count"]
+    assert len(run_data["scenario_results"]) == target_suite["scenario_count"]
+
+def test_run_cancellation_endpoint(client):
+    # Create and verify run cancellation
+    run_payload = {
+        "name": "Run to Cancel",
+        "agent_id": "agent-ticket-sample",
+        "agent_version": "1.0.0",
+        "scenario_id": "SCEN-01-NORMAL-CREATE"
+    }
+    res_run = client.post("/api/runs", json=run_payload)
+    run_id = res_run.json()["id"]
+
+    # Calling cancel endpoint
+    res_cancel = client.post(f"/api/runs/{run_id}/cancel")
+    assert res_cancel.status_code == 200
+    assert "status" in res_cancel.json()

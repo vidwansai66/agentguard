@@ -14,8 +14,25 @@ SENSITIVE_KEY_PATTERNS = [
 SENSITIVE_VALUE_PATTERNS = [
     re.compile(r"sk-[a-zA-Z0-9]{20,}", re.IGNORECASE),
     re.compile(r"Bearer\s+[a-zA-Z0-9\-_.]+", re.IGNORECASE),
+    re.compile(r"(?:token|secret|api[_-]?key|password)\s+([a-zA-Z0-9\-_.]+)", re.IGNORECASE),
     re.compile(r"\b(?:\d{4}[ -]?){3}\d{4}\b"), # Credit card
 ]
+
+def sanitize_text(text: str | None) -> str | None:
+    if text is None:
+        return None
+    cleaned = str(text)
+    for p in SENSITIVE_VALUE_PATTERNS:
+        cleaned = p.sub("[REDACTED_SECRET]", cleaned)
+    # Redact common key-value pairings in free-form text or exception strings
+    for k_pat in SENSITIVE_KEY_PATTERNS:
+        cleaned = re.sub(
+            rf"({k_pat.pattern}\s*[:=]\s*['\"]?)[^\s,'\"}}\]]+",
+            r"\1[REDACTED_SECRET]",
+            cleaned,
+            flags=re.IGNORECASE
+        )
+    return cleaned
 
 def sanitize_value(key: str, val: Any) -> Any:
     # Check key name
@@ -23,10 +40,7 @@ def sanitize_value(key: str, val: Any) -> Any:
         return "[REDACTED_SECRET]"
 
     if isinstance(val, str):
-        cleaned = val
-        for p in SENSITIVE_VALUE_PATTERNS:
-            cleaned = p.sub("[REDACTED_SECRET]", cleaned)
-        return cleaned
+        return sanitize_text(val)
 
     elif isinstance(val, dict):
         return sanitize_dict(val)

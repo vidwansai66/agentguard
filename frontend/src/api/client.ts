@@ -9,7 +9,13 @@ import {
   ScenarioResult,
   Diagnosis,
   RepairProposal,
-  Comparison
+  Comparison,
+  CustomAgentRegisterPayload,
+  ExistingAgentConnectRequest,
+  ValidateConfigResponse,
+  TestConnectionResponse,
+  CompatibilityResponse,
+  FrameworkCatalogItem
 } from '../types';
 
 const API_BASE = '/api';
@@ -67,6 +73,57 @@ class ApiClient {
     return this.request<Agent>(`/agents/${id}`);
   }
 
+  async registerCustomAgent(payload: CustomAgentRegisterPayload): Promise<Agent> {
+    return this.request<Agent>('/agents/custom', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async connectExistingAgent(payload: ExistingAgentConnectRequest): Promise<Agent> {
+    return this.request<Agent>('/agents/connect-existing', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async getFrameworkCatalog(): Promise<FrameworkCatalogItem[]> {
+    return this.request<FrameworkCatalogItem[]>('/agents/frameworks/catalog');
+  }
+
+
+  async validateAgentConfig(adapter_type: string, adapter_config: Record<string, any>): Promise<ValidateConfigResponse> {
+    return this.request<ValidateConfigResponse>('/agents/validate-config', {
+      method: 'POST',
+      body: JSON.stringify({ adapter_type, adapter_config })
+    });
+  }
+
+  async testAgentConnection(agentId: string, adapter_type?: string, adapter_config?: Record<string, any>): Promise<TestConnectionResponse> {
+    return this.request<TestConnectionResponse>(`/agents/${agentId}/test-connection`, {
+      method: 'POST',
+      body: JSON.stringify({ adapter_type, adapter_config })
+    });
+  }
+
+  async getAgentRuns(agentId: string): Promise<TestRun[]> {
+    return this.request<TestRun[]>(`/agents/${agentId}/runs`);
+  }
+
+  async updateAgent(agentId: string, payload: Partial<Agent>): Promise<Agent> {
+    return this.request<Agent>(`/agents/${agentId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async checkScenarioCompatibility(agentId: string, scenarioIds: string[], suiteId?: string): Promise<CompatibilityResponse> {
+    return this.request<CompatibilityResponse>('/scenarios/compatibility', {
+      method: 'POST',
+      body: JSON.stringify({ agent_id: agentId, scenario_ids: scenarioIds, suite_id: suiteId })
+    });
+  }
+
   // Scenarios
   async getScenarios(params?: { failure_type?: string; severity?: string; search?: string }): Promise<Scenario[]> {
     const query = new URLSearchParams();
@@ -111,10 +168,10 @@ class ApiClient {
     return this.request<{ version: string; scenarios: Scenario[] }>('/scenarios/export');
   }
 
-  async importScenarios(scenarios: Partial<Scenario>[]): Promise<{ imported_count: number; scenario_ids: string[] }> {
+  async importScenarios(payload: any): Promise<{ imported_count: number; scenario_ids: string[] }> {
     return this.request<{ imported_count: number; scenario_ids: string[] }>('/scenarios/import', {
       method: 'POST',
-      body: JSON.stringify({ scenarios })
+      body: JSON.stringify(payload)
     });
   }
 

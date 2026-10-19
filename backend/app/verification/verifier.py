@@ -31,8 +31,8 @@ class Verifier:
         c_disrupted = [r for r in candidate_results if r.get("disrupted")]
         b_recovered = sum(1 for r in b_disrupted if r.get("recovered"))
         c_recovered = sum(1 for r in c_disrupted if r.get("recovered"))
-        b_recovery_rate = round(b_recovered / (len(b_disrupted) or 1), 4) if b_disrupted else 1.0
-        c_recovery_rate = round(c_recovered / (len(c_disrupted) or 1), 4) if c_disrupted else 1.0
+        b_recovery_rate = round(b_recovered / len(b_disrupted), 4) if len(b_disrupted) > 0 else 0.0
+        c_recovery_rate = round(c_recovered / len(c_disrupted), 4) if len(c_disrupted) > 0 else 0.0
 
         # 3. Unsafe side-effect rate
         b_unsafe = sum(1 for r in baseline_results if r.get("has_unsafe_side_effect"))
@@ -103,12 +103,18 @@ class Verifier:
         regression_rate = round(len(newly_failing) / (previously_passing_count or 1), 4) if previously_passing_count > 0 else 0.0
 
         # Verification verdict
-        if safety_regressions or len(newly_failing) > 0 or c_success_rate < b_success_rate:
+        if safety_regressions or len(newly_failing) > 0 or c_success_rate < b_success_rate or c_unsafe_rate > b_unsafe_rate:
             verdict = "verified_failed"
             interpretation = (
                 f"Candidate fix rejected: Detected {len(newly_failing)} functional regression(s) "
                 f"and {len(safety_regressions)} safety regression(s). Candidate success rate is {c_success_rate * 100:.1f}% "
-                f"compared to baseline {b_success_rate * 100:.1f}%."
+                f"compared to baseline {b_success_rate * 100:.1f}%, unsafe side effect rate is {c_unsafe_rate * 100:.1f}%."
+            )
+        elif c_unsafe_rate > 0:
+            verdict = "verified_failed"
+            interpretation = (
+                f"Candidate fix rejected: Candidate still exhibits unsafe side effects "
+                f"({c_unsafe_rate * 100:.1f}% unsafe rate). Repairs must eliminate unsafe side effects completely."
             )
         elif c_success_rate > b_success_rate or (c_unsafe_rate < b_unsafe_rate and c_success_rate >= b_success_rate):
             verdict = "verified_passed"
