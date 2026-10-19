@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agentguard-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - AGENTGUARD_ENV=production
+      - DATABASE_URL=sqlite:////data/agentguard.db
+      - HOST=0.0.0.0
+      - PORT=8000
+    volumes:
+      - backend-data:/data
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: agentguard-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend-data:
