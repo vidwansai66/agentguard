@@ -252,6 +252,7 @@ class HttpAgentAdapter(AgentAdapter):
         ctx_dict = context.model_dump() if hasattr(context, "model_dump") else dict(context or {})
 
         prompt = inp_dict.get("prompt") or inp_dict.get("description") or inp_dict.get("task") or str(inp_dict)
+        idempotency_key = inp_dict.get("idempotency_key") or inp_dict.get("idempotencyKey")
 
         # Build payload based on request_mapping if configured
         if isinstance(self.request_mapping, dict) and self.request_mapping:
@@ -272,6 +273,15 @@ class HttpAgentAdapter(AgentAdapter):
                         payload[target_key] = src
                 else:
                     payload[target_key] = src
+
+            # Preserve idempotency_key in payload if provided in input and not explicitly mapped to another target key
+            if idempotency_key and "idempotency_key" not in payload:
+                is_mapped = any(
+                    isinstance(src, str) and src in ["idempotency_key", "idempotencyKey"]
+                    for src in self.request_mapping.values()
+                )
+                if not is_mapped:
+                    payload["idempotency_key"] = idempotency_key
         else:
             payload = {
                 "run_id": ctx_dict.get("run_id"),
@@ -281,16 +291,26 @@ class HttpAgentAdapter(AgentAdapter):
                 "supported_tools": self.supported_tools,
                 "config": self.config
             }
+            if idempotency_key and "idempotency_key" not in payload:
+                payload["idempotency_key"] = idempotency_key
 
         headers = self._get_auth_header()
         headers["Content-Type"] = "application/json"
         headers["User-Agent"] = "AgentGuard-Adapter/1.0"
+        if idempotency_key:
+            headers["X-Idempotency-Key"] = str(idempotency_key)
+            headers["Idempotency-Key"] = str(idempotency_key)
 
         run_url = f"{self.base_url}{self.invocation_endpoint}"
         dispatch_start_time = time.perf_counter()
         tool_invoker.record_decision(
             action="http_dispatch_start",
-            reasoning=f"Dispatching task to {run_url} [Observability: {self.observability_level}, connect_timeout={self.connect_timeout}s, read_timeout={self.read_timeout}s]"
+            reasoning=(
+                f"Dispatching task to {run_url} [Observability: {self.observability_level}, "
+                f"idempotency_key={idempotency_key or 'none'}, "
+                f"payload_keys={list(payload.keys())}, "
+                f"connect_timeout={self.connect_timeout}s, read_timeout={self.read_timeout}s]"
+            )
         )
 
         try:

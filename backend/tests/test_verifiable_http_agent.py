@@ -545,3 +545,151 @@ def test_regression_duplicate_prevention_different_ticket_ids():
         assert res["has_unsafe_side_effect"] is True
         assert res["execution_output"]["duplicate_prevented"] is False
         assert "returned ticket" in res["execution_output"]["error"]
+
+
+def test_regression_http_adapter_duplicate_prevention_with_request_mapping_and_repeated_key(mock_http_client, test_agent_store):
+    """
+    Regression test: Verifies that a registered HTTP adapter with request_mapping (like agent-home)
+    properly preserves and transmits the idempotency key in both payload and headers,
+    exposes it in http_dispatch_start reasoning, returns the same ticket with is_duplicate=True,
+    and passes SCEN-12-DUPLICATE-PREVENTION.
+    """
+    from app.db.seed_data import DEMO_SCENARIOS
+
+    scen_12 = next(s for s in DEMO_SCENARIOS if s["id"] == "SCEN-12-DUPLICATE-PREVENTION")
+
+    # Adapter configured with request_mapping that does NOT explicitly mention idempotency_key
+    # (reproducing the exact agent-home registration)
+    adapter_config = {
+        "base_url": "http://127.0.0.1:9099",
+        "invocation_endpoint": "/run",
+        "allow_local_dev": True,
+        "_client": mock_http_client,
+        "request_mapping": {
+            "query": "prompt",
+            "session_id": "run_id"
+        },
+        "response_mapping": {
+            "result_path": "output",
+            "status_path": "status",
+            "ticket_id_path": "ticket_id"
+        }
+    }
+
+    result = scenario_runner.run_scenario(
+        scenario_data=scen_12,
+        agent_id="agent-home",
+        agent_version="1.0.0",
+        adapter_type="http",
+        custom_config=adapter_config
+    )
+
+    assert result["passed"] is True
+    assert result["status"] == "passed"
+    assert result["has_unsafe_side_effect"] is False
+    assert result["execution_output"]["duplicate_prevented"] is True
+
+    # Verify http_dispatch_start exposes the idempotency key
+    dispatch_starts = [e for e in result["trace_events"] if e["action_name"] == "http_dispatch_start"]
+    assert len(dispatch_starts) == 2
+    for ds in dispatch_starts:
+        assert "idempotency_key=idemp-vpn-duplicate-001" in ds["sanitized_input"]["reasoning"]
+
+    # Verify both responses returned the exact same ticket ID
+    http_resps = [e for e in result["trace_events"] if e["action_name"] == "http_response"]
+    assert len(http_resps) == 2
+    t1 = http_resps[0]["sanitized_output"]["ticket_id"]
+    t2 = http_resps[1]["sanitized_output"]["ticket_id"]
+    assert t1 == t2
+    assert http_resps[0]["sanitized_output"]["is_duplicate"] is False
+    assert http_resps[1]["sanitized_output"]["is_duplicate"] is True
+
+    # Out-of-band store check: exactly 1 ticket in store
+    assert len(test_agent_store.get_all_tickets()) == 1
+
+
+def test_regression_http_adapter_distinct_keys_fail_duplicate_prevention(mock_http_client, test_agent_store):
+    """
+    Regression test: Verifies that when distinct keys are transmitted across duplicate requests,
+    the HTTP service creates distinct tickets, returns is_duplicate=False on the second request,
+    and ScenarioRunner honestly fails duplicate prevention with an unsafe side effect.
+    """
+    from app.db.seed_data import DEMO_SCENARIOS
+
+    scen_12 = dict(next(s for s in DEMO_SCENARIOS if s["id"] == "SCEN-12-DUPLICATE-PREVENTION"))
+    scen_12["fault_parameters"] = {
+        "exercise_duplicate_request": True,
+        "duplicate_probe_task_input": {
+            "action": "create_ticket",
+            "title": "Distinct Request",
+            "description": "Distinct request with distinct key",
+            "idempotency_key": "idemp-vpn-distinct-999"
+        }
+    }
+
+    adapter_config = {
+        "base_url": "http://127.0.0.1:9099",
+        "invocation_endpoint": "/run",
+        "allow_local_dev": True,
+        "_client": mock_http_client,
+        "request_mapping": {
+            "query": "prompt",
+            "session_id": "run_id"
+        },
+        "response_mapping": {
+            "result_path": "output",
+            "status_path": "status",
+            "ticket_id_path": "ticket_id"
+        }
+    }
+
+    result = scenario_runner.run_scenario(
+        scenario_data=scen_12,
+        agent_id="agent-home",
+        agent_version="1.0.0",
+        adapter_type="http",
+        custom_config=adapter_config
+    )
+
+    # Must fail honestly because keys and ticket IDs differed
+    assert result["passed"] is False
+    assert result["status"] == "failed"
+    assert result["has_unsafe_side_effect"] is True
+    assert result["execution_output"]["duplicate_prevented"] is False
+
+    # Out-of-band store check: 2 distinct tickets created
+    tickets = test_agent_store.get_all_tickets()
+    assert len(tickets) == 2
+    assert tickets[0]["idempotency_key"] == "idemp-vpn-duplicate-001"
+    assert tickets[1]["idempotency_key"] == "idemp-vpn-distinct-999"
+    assert tickets[0]["id"] != tickets[1]["id"]
+
+
+def test_regression_mock_http_service_repeated_vs_distinct_keys(mock_http_client, test_agent_store):
+    """
+    Regression test directly verifying MockHttpTicketStore and /run endpoint honoring
+    repeated keys (idempotent reuse) vs distinct keys (new tickets created).
+    """
+    # 1. Repeated key
+    resp1 = mock_http_client.post("/run", json={"task": "Query 1", "idempotency_key": "k-same-1"})
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    assert data1["is_duplicate"] is False
+    tid1 = data1["ticket_id"]
+
+    resp2 = mock_http_client.post("/run", json={"task": "Query 1 repeat", "idempotency_key": "k-same-1"})
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2["is_duplicate"] is True
+    assert data2["ticket_id"] == tid1
+
+    # 2. Distinct key
+    resp3 = mock_http_client.post("/run", json={"task": "Query 2", "idempotency_key": "k-distinct-2"})
+    assert resp3.status_code == 200
+    data3 = resp3.json()
+    assert data3["is_duplicate"] is False
+    assert data3["ticket_id"] != tid1
+
+    # 3. Store holds exactly 2 tickets total
+    assert len(test_agent_store.get_all_tickets()) == 2
+

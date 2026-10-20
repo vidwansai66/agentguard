@@ -163,7 +163,14 @@ async def mock_run(request):
 
     title = body.get("title") or (body.get("task_input", {}).get("title") if isinstance(body.get("task_input"), dict) else None) or f"Inquiry: {task[:40]}"
     priority = body.get("priority") or (body.get("task_input", {}).get("priority") if isinstance(body.get("task_input"), dict) else None) or "medium"
-    idempotency_key = body.get("idempotency_key") or (body.get("task_input", {}).get("idempotency_key") if isinstance(body.get("task_input"), dict) else None) or request.headers.get("X-Idempotency-Key")
+    idempotency_key = (
+        body.get("idempotency_key")
+        or body.get("idempotencyKey")
+        or (body.get("task_input", {}).get("idempotency_key") if isinstance(body.get("task_input"), dict) else None)
+        or (body.get("task_input", {}).get("idempotencyKey") if isinstance(body.get("task_input"), dict) else None)
+        or request.headers.get("X-Idempotency-Key")
+        or request.headers.get("Idempotency-Key")
+    )
 
     # 4. Create or retrieve ticket via store
     ticket_res = store.create_or_get_ticket(
@@ -237,3 +244,8 @@ def create_mock_agent_app(store: Optional[MockHttpTicketStore] = None) -> Starle
     app = Starlette(routes=routes)
     app.state.ticket_store = app_store
     return app
+
+
+# Default ASGI app instance for standalone execution (e.g. uvicorn app.agents.local_mock_http_service:app)
+app = create_mock_agent_app(default_mock_store)
+

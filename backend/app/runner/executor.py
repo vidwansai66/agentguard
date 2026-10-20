@@ -461,9 +461,10 @@ class ScenarioRunner:
                     )
                 )
 
-                # Execute second equivalent request with identical payload
+                # Execute second request with identical payload (or custom probe input if testing distinct keys)
+                second_task_input = fault_params.get("duplicate_probe_task_input") or scenario_data.get("task_input", {})
                 second_output = agent.run_task(
-                    task_input=scenario_data.get("task_input", {}),
+                    task_input=second_task_input,
                     context=context,
                     tool_invoker=tool_invoker
                 )
