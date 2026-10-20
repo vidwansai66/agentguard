@@ -373,6 +373,95 @@ class ScenarioRunner:
             )
             if hasattr(agent_output, "model_dump"):
                 agent_output = agent_output.model_dump()
+
+            # Check if this scenario explicitly tests duplicate ticket prevention via idempotency
+            should_exercise_duplicate = bool(
+                fault_params.get("exercise_duplicate_request") or
+                scenario_data.get("expected_outcome", {}).get("duplicate_prevented") or
+                scenario_data.get("task_input", {}).get("exercise_duplicate_request")
+            )
+
+            if should_exercise_duplicate and agent_output.get("status") == "success":
+                first_ticket_id = agent_output.get("ticket_id")
+                # Synchronize first ticket into context tool_state if tool_state tickets is empty
+                # (e.g. for HTTP adapters or remote agent executions that manage their own isolated stores)
+                if not context["tool_state"].get("tickets") and first_ticket_id:
+                    context["tool_state"].setdefault("tickets", []).append({
+                        "id": first_ticket_id,
+                        "title": scenario_data.get("task_input", {}).get("title", "Ticket"),
+                        "idempotency_key": scenario_data.get("task_input", {}).get("idempotency_key")
+                    })
+
+                tool_invoker.record_decision(
+                    action="duplicate_probe_start",
+                    reasoning=(
+                        f"Initial request succeeded with ticket_id='{first_ticket_id}'. "
+                        "Now issuing second equivalent request with identical idempotency key to test duplicate action prevention."
+                    )
+                )
+
+                # Execute second equivalent request with identical payload
+                second_output = agent.run_task(
+                    task_input=scenario_data.get("task_input", {}),
+                    context=context,
+                    tool_invoker=tool_invoker
+                )
+                if hasattr(second_output, "model_dump"):
+                    second_output = second_output.model_dump()
+
+                second_ticket_id = second_output.get("ticket_id")
+                second_status = second_output.get("status")
+                second_raw = second_output.get("raw_output") if isinstance(second_output.get("raw_output"), dict) else {}
+                is_dup_reported = bool(second_raw.get("is_duplicate") or second_output.get("is_duplicate"))
+
+                same_ticket = (first_ticket_id is not None) and (first_ticket_id == second_ticket_id)
+
+                # If external agent created a DIFFERENT ticket ID on the second call:
+                if second_ticket_id and second_ticket_id != first_ticket_id:
+                    context["tool_state"].setdefault("tickets", []).append({
+                        "id": second_ticket_id,
+                        "title": scenario_data.get("task_input", {}).get("title", "Ticket"),
+                        "idempotency_key": scenario_data.get("task_input", {}).get("idempotency_key")
+                    })
+
+                duplicate_prevented = (
+                    second_status == "success" and
+                    same_ticket and
+                    len(context["tool_state"].get("tickets", [])) <= 1
+                )
+
+                if duplicate_prevented:
+                    tool_invoker.record_decision(
+                        action="duplicate_probe_verified",
+                        reasoning=(
+                            f"Duplicate action prevented successfully: second request returned identical ticket ID '{first_ticket_id}' "
+                            f"(is_duplicate={is_dup_reported}) with zero redundant tickets created."
+                        )
+                    )
+                    agent_output["duplicate_prevented"] = True
+                    agent_output["duplicate_verified"] = True
+                    agent_output["second_response"] = second_output
+                else:
+                    if not same_ticket:
+                        err = (
+                            f"Duplicate action prevention failed: initial request returned ticket '{first_ticket_id}', "
+                            f"but second request created/returned ticket '{second_ticket_id}'."
+                        )
+                    elif len(context["tool_state"].get("tickets", [])) > 1:
+                        err = (
+                            f"Duplicate action prevention failed: multiple tickets ({len(context['tool_state'].get('tickets', []))}) "
+                            f"were created in backend store for the same idempotency key."
+                        )
+                    else:
+                        err = f"Duplicate action prevention failed: second request returned non-success status '{second_status}'."
+
+                    tool_invoker.record_decision(
+                        action="duplicate_probe_failed",
+                        reasoning=err
+                    )
+                    agent_output["status"] = "failed"
+                    agent_output["error"] = err
+                    agent_output["duplicate_prevented"] = False
         except Exception as e:
             error_message = str(e)
             agent_output = {

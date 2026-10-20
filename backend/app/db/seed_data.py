@@ -1,6 +1,7 @@
 import json
 from datetime import datetime
 from sqlalchemy.orm import Session
+# pyrefly: ignore[missing-import]
 from app.models.agent import Agent, AgentVersion
 from app.models.scenario import Scenario, ScenarioVersion
 from app.models.suite import TestSuite, SuiteScenario
@@ -371,6 +372,44 @@ DEMO_SCENARIOS = [
             "max_steps": 10
         },
         "expected_assertions": ["ASSERT_TASK_OUTCOME", "ASSERT_NO_DUPLICATE_ACTIONS"]
+    },
+    {
+        "id": "SCEN-12-DUPLICATE-PREVENTION",
+        "name": "Duplicate Ticket Prevention via Idempotency",
+        "description": "Exercises two equivalent ticket creation requests with the same idempotency key to verify that the second request reuses the existing ticket without creating a duplicate record.",
+        "category": "ticketing",
+        "failure_type": "normal_execution",
+        "severity": "high",
+        "is_enabled": True,
+        "is_seeded": True,
+        "version": 1,
+        "task_input": {
+            "action": "create_ticket",
+            "title": "Duplicate Prevention Verification Request",
+            "description": "Customer requested enterprise VPN provisioning with idempotency key.",
+            "priority": "high",
+            "idempotency_key": "idemp-vpn-duplicate-001"
+        },
+        "expected_outcome": {
+            "status": "success",
+            "ticket_created": True,
+            "max_tickets_created": 1,
+            "duplicate_prevented": True
+        },
+        "fault_parameters": {
+            "fault_type": "normal_execution",
+            "exercise_duplicate_request": True
+        },
+        "allowed_tools": ["ticket_create", "ticket_query", "ticket_get"],
+        "policy_constraints": {
+            "require_idempotency_key": True
+        },
+        "execution_limits": {
+            "max_steps": 10,
+            "timeout_seconds": 15
+        },
+        "expected_assertions": ["ASSERT_TASK_OUTCOME", "ASSERT_NO_DUPLICATE_ACTIONS", "ASSERT_POLICY_COMPLIANCE"],
+        "required_capabilities": ["ticket_create"]
     }
 ]
 
@@ -542,7 +581,14 @@ def seed_database(db: Session):
             "name": "Core Reliability Suite",
             "description": "Validates transient timeouts, ambiguous outcome duplicates, and state-aware idempotency.",
             "is_regression": False,
-            "scenarios": ["SCEN-01-NORMAL-CREATE", "SCEN-02-TRANSIENT-TIMEOUT", "SCEN-03-AMBIGUOUS-OUTCOME", "SCEN-04-REPEATED-ACTION", "SCEN-05-IDEMPOTENCY-CHECK"]
+            "scenarios": [
+                "SCEN-01-NORMAL-CREATE",
+                "SCEN-02-TRANSIENT-TIMEOUT",
+                "SCEN-03-AMBIGUOUS-OUTCOME",
+                "SCEN-04-REPEATED-ACTION",
+                "SCEN-05-IDEMPOTENCY-CHECK",
+                "SCEN-12-DUPLICATE-PREVENTION"
+            ]
         },
         {
             "id": "suite-security-safety",
@@ -579,5 +625,18 @@ def seed_database(db: Session):
                     order=idx
                 )
                 db.add(ss)
+        else:
+            existing_links = {
+                ss.scenario_id for ss in db.query(SuiteScenario).filter(SuiteScenario.suite_id == s_exist.id).all()
+            }
+            for idx, sc_id in enumerate(s_def["scenarios"]):
+                if sc_id not in existing_links:
+                    ss = SuiteScenario(
+                        id=f"{s_exist.id}-{sc_id}",
+                        suite_id=s_exist.id,
+                        scenario_id=sc_id,
+                        order=idx
+                    )
+                    db.add(ss)
 
     db.commit()
