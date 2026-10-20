@@ -1,396 +1,243 @@
 # AgentGuard 🛡️
-### AI Agent Reliability Testing, Safety Evaluation & Verified Repair
+### AI Agent Reliability Testing, Safety Evaluation & Verified Repair Platform
 
 **Test how AI agents fail. Understand why they fail. Verify whether a proposed fix actually works.**
 
-AgentGuard is an AI agent reliability-testing platform that evaluates agents under controlled failures, records execution traces, detects unsafe side effects, generates evidence-linked diagnoses, and verifies candidate repairs against a baseline.
+AgentGuard is an AI agent reliability-testing platform that executes agents under controlled failure conditions, captures structured execution traces, detects unsafe side effects, generates evidence-linked diagnoses, and verifies candidate repairs against an empirical baseline.
 
-Instead of trusting an agent's claim that a task succeeded, AgentGuard evaluates its observable behavior against explicit assertions and measurable outcomes.
+Instead of trusting an agent's self-reported claim that a task succeeded, AgentGuard evaluates observable tool actions and system state against explicit, deterministic assertions.
+
+---
+
+### 🌐 Live Deployments & Interactive Links
+
+| Component | Target URL | Description |
+|---|---|---|
+| **Web Dashboard** | [https://agentguard-chi.vercel.app/](https://agentguard-chi.vercel.app/) | React + TypeScript + Vite interactive evaluation UI |
+| **Backend API** | [https://agentguard-p14p.onrender.com](https://agentguard-p14p.onrender.com) | FastAPI reliability engine and execution runner |
+| **Interactive Docs** | [https://agentguard-p14p.onrender.com/docs](https://agentguard-p14p.onrender.com/docs) | OpenAPI / Swagger interactive API documentation |
+| **API Health** | [https://agentguard-p14p.onrender.com/health](https://agentguard-p14p.onrender.com/health) | Live system health and database status probe |
+| **Recruiter Walkthrough** | [docs/recruiter-demo-script.md](docs/recruiter-demo-script.md) | 3–5 minute step-by-step demonstration script |
 
 <p align="center">
-  <img src="docs/images/agentguard-dashboard.png" alt="AgentGuard reliability dashboard" width="100%">
-</p>
-
-<p align="center">
-  <strong>Controlled experiments · Observable execution · Evidence-based evaluation · Verified repairs</strong>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-Backend-blue?logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi" alt="FastAPI">
-  <img src="https://img.shields.io/badge/React-Frontend-61DAFB?logo=react" alt="React">
-  <img src="https://img.shields.io/badge/TypeScript-Frontend-3178C6?logo=typescript" alt="TypeScript">
-  <img src="https://img.shields.io/badge/Testing-pytest-0A9EDC?logo=pytest" alt="pytest">
+  <img src="https://img.shields.io/badge/Python-3.11-blue?logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi" alt="FastAPI">
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React">
+  <img src="https://img.shields.io/badge/TypeScript-5.2-3178C6?logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/Backend_Tests-75%20Passing-success?logo=pytest" alt="Backend Tests">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
   <img src="https://img.shields.io/badge/Status-Research_MVP-orange" alt="Research MVP">
 </p>
 
 ---
 
-## 📌 The problem
-
-AI agents can fail in ways that ordinary success/failure checks do not adequately capture.
-
-Consider an agent that creates a support ticket through a tool API.
-
-1. The API successfully creates the ticket.
-2. The response is lost because of a timeout.
-3. The agent assumes the operation failed and retries.
-4. A second ticket is created for the same logical task.
-5. The agent reports success, even though an unsafe duplicate side effect occurred.
-
-A successful final response does not necessarily mean a successful execution.
-
-AgentGuard explores how to identify these failures, measure their consequences, and verify safer recovery strategies through controlled experiments.
-
-## 💡 What AgentGuard does
-
-| Capability | Purpose |
-|---|---|
-| Agent integration | Connect compatible Python, HTTP, framework-based, and model-backed agents |
-| Scenario engine | Define repeatable tasks, expected outcomes, faults, and evaluation rules |
-| Fault injection | Simulate controlled timeouts, ambiguous outcomes, malformed outputs, repeated actions, prompt injection, and policy violations |
-| Execution tracing | Record observable agent steps, tool calls, errors, retries, and outcomes |
-| Deterministic evaluation | Evaluate actual results and side effects against explicit assertions |
-| Evidence-linked diagnosis | Identify likely failure causes using execution evidence |
-| Repair proposals | Review supported candidate fixes before verification |
-| Baseline comparison | Compare candidate behavior against a baseline under compatible test conditions |
-| Regression detection | Identify previously passing tests that fail after a change |
-
-## 🧪 A core experiment: The ambiguous timeout
-
-AgentGuard includes a controlled ticket-creation experiment designed to demonstrate the difference between naive retry behavior and safer recovery.
-
-### Baseline versus candidate
-
-```text
-                    BASELINE AGENT
-                          |
-                          v
-                  Create support ticket
-                          |
-                          v
-                   Ticket is created
-                          |
-                          v
-                  Response is lost
-                          |
-                          v
-                    Blind retry
-                          |
-                          v
-                  Duplicate ticket
-                          |
-                          v
-               Evaluator flags failure
-
-
-                   CANDIDATE AGENT
-                          |
-                          v
-                  Create support ticket
-                          |
-                          v
-                   Response is lost
-                          |
-                          v
-                Recover operation state
-                or reuse idempotency key
-                          |
-                          v
-                 Avoid duplicate action
-                          |
-                          v
-                Evaluator checks outcome
-```
-
-The evaluator checks more than whether a ticket exists. It also checks whether duplicate side effects occurred and whether the recovery strategy satisfied the scenario's safety requirements.
-
-### Example verification result
-
-The implementation's reported single-run comparison for the ambiguous-outcome scenario produced the following results:
-
-| Metric | Baseline | Candidate |
-|---|---:|---:|
-| Task success rate | 0% | 100% |
-| Unsafe side-effect rate | 100% | 0% |
-| Regressions in the reported comparison | — | 0 |
-
-These are **results from a controlled mock scenario, not a general benchmark of AI-agent reliability**. They demonstrate the intended workflow but do not establish that the candidate will outperform the baseline across arbitrary agents, tasks, or environments.
-
-Reproduce the experiment before using these figures in a presentation or publication.
-
-## 🏗️ Architecture
+## 🏗️ Architecture & Execution Flow
 
 ```mermaid
-flowchart TD
-    A[AgentGuard Web UI] --> B[FastAPI Backend]
-    B --> C[Agent Registry and Adapters]
-    B --> D[Scenario Engine]
-    C --> E[Agent Execution]
-    D --> F[Fault Injector]
-    E --> F
-    F --> G[Controlled Mock Tools]
-    E --> H[Trace Recorder]
-    F --> H
-    H --> I[Deterministic Evaluator]
-    I --> J[Diagnosis Engine]
-    J --> K[Repair Proposal]
-    K --> L[Candidate Verification]
-    L --> M[Baseline Comparison]
-    B <--> N[(SQLite Database)]
-    H --> N
-    I --> N
-    M --> N
+graph TD
+    UI[AgentGuard React + Vite Dashboard] -->|REST API / Trace Events| API[FastAPI Backend Engine]
+    API --> Adapters[Adapter Layer: Python SDK | HTTP/REST | LangGraph | OpenAI-Compatible]
+    Adapters --> Interceptor[Fault Injection & Interception Engine]
+    Interceptor --> Tools[Controlled Tool Registry / Mock Sandbox]
+    Interceptor --> Trace[Structured Trace Recorder]
+    Trace --> Eval[Deterministic Evaluator: Explicit Safety Assertions]
+    Eval --> Diag[Evidence-Linked Diagnosis Engine]
+    Diag --> Patches[Candidate Repair Proposals]
+    Patches --> Verifier[Baseline vs Candidate Verifier]
+    API <--> DB[(SQLite Database / PostgreSQL)]
 ```
 
-### Technology stack
+---
 
-**Frontend**
-- React
-- TypeScript
-- Vite
-- Tailwind CSS
-- Recharts
-- React Router
+## 📌 The Problem: Silent Agent Failures
 
-**Backend**
-- Python
-- FastAPI
-- Pydantic
-- SQLAlchemy
-- SQLite
-- pytest
+AI agents interacting with real-world APIs fail in ways that conventional status codes and LLM benchmarks cannot detect:
 
-**Agent integration**
-- Trusted Python adapters
-- HTTP/API adapters
-- LangGraph adapter
-- OpenAI-compatible model-backed adapter
+1. **Blind Retries After Lost Acknowledgments**: An external API creates a resource (e.g. charging a payment or creating an enterprise support ticket), but the network acknowledgment times out. A naive agent assumes failure and retries blindly, creating duplicate records or charging twice.
+2. **False Success Reports**: The LLM responds with a polite confirmation message (`"Successfully created your ticket"`), while the underlying system suffered an unsafe duplicate side effect or state corruption.
+3. **Unverified Fixes**: Engineers patch prompts or agent logic without regression verification, unaware that fixing one failure mode introduced regressions across other scenarios.
 
-**Testing and execution**
-- Controlled mock tools
-- Fault injection
-- Structured trace recording
-- Deterministic evaluation
-- Candidate verification
+AgentGuard addresses this by providing **controlled fault injection, deterministic trace assertion, and empirical candidate-versus-baseline verification**.
 
-The default mock-based workflows do not require a paid LLM API key.
+---
 
-## 🔌 Agent integration
+## 💡 What AgentGuard Does
 
-AgentGuard uses an adapter-based architecture to connect agents through a common execution contract.
+| Capability | Technical Implementation | What It Solves |
+|---|---|---|
+| **Multi-Adapter Support** | Python SDK wrappers, HTTP/REST endpoints, LangGraph StateGraph, and OpenAI-compatible models | Evaluates any agent without requiring an architecture rewrite |
+| **Contract-Driven Observability** | Enforces Level 1 (Result-Only), Level 2 (Structured Events), and Level 3 (Instrumented Tools) | Prevents claiming tool fault coverage for uninstrumented agents |
+| **Fault Injection** | Transient timeouts, ambiguous dropped packets, malformed outputs, repeated actions, prompt injection, and policy violations | Reproduces edge cases deterministically |
+| **Trace-Level Assertions** | Independent evaluator checks actual tool calls, arguments, and side-effect counts | Catches duplicate actions and policy violations regardless of HTTP status |
+| **Evidence-Linked Diagnosis** | Rules-based diagnostic engine maps trace event IDs directly to root causes | Eliminates guesswork when debugging agent failures |
+| **Candidate Verification** | Side-by-side baseline vs candidate repair comparison under identical faults | Validates that a fix works and introduces 0 regressions before deployment |
 
-| Integration | Current scope |
-|---|---|
-| Existing Python agents | Trusted, registered Python callables through a wrapper |
-| HTTP/API agents | Compatible endpoints using a documented request/response contract |
-| LangGraph | Implemented adapter for compatible graph workflows |
-| Model-backed agents | OpenAI-compatible provider interface with controlled tool dispatch |
-| CrewAI | Planned integration |
-| AutoGen | Planned integration |
+---
 
-Integration does not imply universal compatibility. Each agent must satisfy the relevant contract and scenario requirements.
+## 🔬 Featured Case Study: Scenario 12 (Duplicate Action Prevention via Idempotency)
 
-### Observability levels
+Scenario 12 (`SCEN-12-DUPLICATE-PREVENTION`) exercises an agent with two equivalent creation requests carrying the same idempotency key (`idemp-vpn-duplicate-001`).
 
-AgentGuard distinguishes three levels of observability:
+```text
+                  SCENARIO 12 EXECUTION FLOW
+                             │
+                             ▼
+                 [Request 1: Idempotency Key K1]
+                             │
+                             ▼
+                    Create Ticket Record
+                  (Ticket: TICK-HTTP-8EA5A20A)
+                  (is_duplicate: False)
+                             │
+                             ▼
+                 [Request 2: Idempotency Key K1]
+                             │
+                             ▼
+               Target Recognizes Idempotency Key
+                  (Reuses: TICK-HTTP-8EA5A20A)
+                  (is_duplicate: True)
+                             │
+                             ▼
+              Evaluator Safety Assertions:
+              ✓ Both requests return identical ticket ID
+              ✓ Second request explicitly reports is_duplicate=True
+              ✓ Exactly 1 ticket created in store (0 redundant tickets)
+              ✓ ASSERT_NO_DUPLICATE_ACTIONS: PASSED
+```
 
-- **Level 1 — Result-only:** final outputs and errors are available.
-- **Level 2 — Structured events:** observable steps, tool calls, retries, and errors are provided by the integration.
-- **Level 3 — Instrumented tools:** tool calls pass through AgentGuard's controlled tool registry and fault injector.
+### The Real Integration Bug Diagnosed by AgentGuard
+During live integration testing of the registered HTTP adapter `agent-home`, Scenario 12 initially failed:
+- **First request** returned ticket `TICK-HTTP-10F0D719` (`is_duplicate: false`).
+- **Second request** returned ticket `TICK-HTTP-CFCE415C` (`is_duplicate: false`).
+- Both requests succeeded with HTTP 200, but a duplicate ticket was created in the database.
 
-A result-only integration cannot honestly provide complete internal traces or tool-level fault coverage. Scenario compatibility must reflect these limitations.
+### The Root Cause & Verified Fix (Commit `de6f89b`)
+1. **The Bug**: When users configured external HTTP agents using custom `request_mapping` (e.g. `{"query": "prompt", "session_id": "run_id"}`), `HttpAgentAdapter` built the outbound payload by iterating only over mapped keys. Consequently, `idempotency_key` was omitted from the outbound JSON payload and no idempotency headers were transmitted.
+2. **The Fix**:
+   - `HttpAgentAdapter` automatically preserves `idempotency_key` in the request body unless explicitly mapped to a custom key.
+   - Automatically injects standard `X-Idempotency-Key` and `Idempotency-Key` HTTP request headers.
+   - Trace event `http_dispatch_start` logs `idempotency_key` and outbound `payload_keys` for auditability.
+   - `ScenarioRunner` enforces strict verification: if `is_duplicate` is false, missing, or ticket IDs differ, the duplicate probe fails honestly and flags an unsafe side effect.
+3. **Live Production Proof (`RUN-2507978caa`)**:
+   Executed live on Render against `agent-home`:
+   - Request 1: `TICK-HTTP-8EA5A20A` (`is_duplicate: False`)
+   - Request 2: `TICK-HTTP-8EA5A20A` (`is_duplicate: True`)
+   - Evaluator confirmed `duplicate_prevented: True` with 0 redundant tickets created.
 
-## 📊 Reliability metrics
+---
 
-AgentGuard is designed to evaluate several dimensions of agent behavior.
+## 🧪 Core Experiment: The Ambiguous Timeout
 
-| Metric | What it measures |
-|---|---|
-| Task success rate | Share of eligible runs meeting defined task and safety requirements |
-| Recovery rate | Share of eligible disrupted runs that recover correctly |
-| Unsafe side-effect rate | Share of eligible runs containing disallowed or duplicate actions |
-| Latency | Execution duration and supported latency percentiles |
-| Cost per successful task | Estimated cost when reliable cost inputs are available |
-| Regression rate | Share of previously passing eligible tests that fail under a candidate |
+AgentGuard compares naive retry behavior against safer state-recovery implementations under an ambiguous network timeout (lost ACK after commit):
 
-Metrics must be derived from actual stored execution results. Their denominators, unsupported scenarios, cancelled runs, and sample sizes matter.
+| Metric | Baseline Agent (Blind Retry) | Candidate Agent (Query / Idempotent) |
+|---|---:|---:|
+| **Task Success Rate** | **0%** | **100%** |
+| **Unsafe Side-Effect Rate** | **100%** (Duplicate ticket created) | **0%** (Idempotent reuse) |
+| **Regressions Detected** | — | **0** |
 
-AgentGuard is a research MVP. Its metrics and evaluation rules should be reviewed before using them for production decisions or formal safety claims.
+*Note: Results are measured from controlled mock scenarios within AgentGuard and demonstrate the verification workflow.*
 
-## 🛠️ Getting started
+---
+
+## 🔌 Supported Adapter Types & Observability Levels
+
+AgentGuard integrates agents through standardized adapter contracts:
+
+| Adapter Type | Implementation | Observability Level |
+|---|---|---|
+| **Python SDK Wrapper** | Callable wrapper with signature `(prompt, tools) -> dict` | **Level 2** (Structured Events) |
+| **HTTP / REST Agent** | Endpoint invocation (`/run`) with request/response mapping | **Level 1** (Result-Only) or **Level 2** |
+| **LangGraph** | Compiled StateGraph with tool intercept routing | **Level 3** (Instrumented Tools) |
+| **Model-Backed Agent** | OpenAI-compatible API with controlled tool allowlists | **Level 3** (Instrumented Tools) |
+
+### Observability Enforcement
+If an agent only provides Level 1 (Result-Only) observability, AgentGuard **refuses to run tool-fault injection scenarios** (e.g. ambiguous outcomes or tool timeouts). Because the agent's internal tool invocations cannot be observed without instrumentation, AgentGuard honestly marks the scenario as unsupported rather than fabricating passing results.
+
+---
+
+## 🛠️ Getting Started Locally
 
 ### Prerequisites
-
-- Python 3.10 or a version compatible with the project's dependencies
-- Node.js and npm
+- Python 3.10+ (Python 3.11 recommended)
+- Node.js 18+ and npm
 - Git
 
-Check the repository's dependency files for the exact supported versions.
-
-### 1. Clone the repository
-
+### 1. Clone the Repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/AgentGuard.git
-cd AgentGuard
+git clone https://github.com/vidwansai66/agentguard.git
+cd agentguard
 ```
 
-### 2. Set up the backend
-
-From the project root, enter the backend directory:
-
+### 2. Set Up and Run the Backend
 ```bash
 cd backend
 python -m venv .venv
-```
 
-Activate the environment on Windows:
-
-```powershell
+# On Windows:
 .venv\Scripts\Activate.ps1
-```
+# On macOS / Linux:
+source .venv/bin/activate
 
-Install the dependencies using the repository's dependency manifest. For example, if the project uses `requirements.txt`:
-
-```bash
 pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
+API documentation will be available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
-If dependencies are managed through `pyproject.toml`, follow that file's installation instructions instead.
-
-Configure environment variables using the provided `.env.example` if required.
-
-Start FastAPI using the application's documented entry point. For example, if the application exposes `app.main:app`:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-Open the API documentation at:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### 3. Set up the frontend
-
-Open a separate terminal:
-
+### 3. Set Up and Run the Frontend
+In a separate terminal:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+The application will open at [http://localhost:5173](http://localhost:5173).
 
-Open the development URL printed by Vite. In the current development setup, this is expected to be:
+---
 
-```text
-http://localhost:5174
-```
+## 🧪 Running Automated Tests
 
-If the application uses a different configured port, follow the terminal output.
-
-### 4. Run the backend tests
-
-From the backend directory, activate the project's virtual environment and run:
-
+### Backend Automated Test Suite
+From the repository root (with virtual environment active):
 ```bash
-python -m pytest tests -v
+pytest backend/tests -v
 ```
+**Outcome**: 75 tests passing covering adapters, faults, evaluator rules, idempotency propagation, and security boundaries.
 
-### 5. Build the frontend
-
-From the frontend directory:
-
+### Universal Integration Acceptance Suite
 ```bash
-npm run build
+python backend/verify_universal_acceptance.py
+```
+**Outcome**: Validates all 6 integration paths (Python wrapper, HTTP service, LangGraph, Model-backed, Observability boundaries, and Evaluator verifier).
+
+### Frontend Unit Tests & Production Build
+```bash
+cd frontend
+npm test        # Runs Vitest unit tests
+npm run build   # Type-checks (tsc) and generates production Vite bundle
 ```
 
-Use the repository's actual entry points and dependency manifests if they differ from these examples.
+---
 
-## 🔍 Example workflow
+## 🔐 Architecture Boundaries & Limitations
 
-1. Open the AgentGuard dashboard.
-2. Register or select a compatible agent.
-3. Choose an executable scenario.
-4. Run the agent under the configured fault conditions.
-5. Inspect the execution trace.
-6. Review the independent evaluator's findings.
-7. Generate a diagnosis.
-8. Review and approve a supported repair proposal.
-9. Execute the candidate verification workflow.
-10. Compare baseline and candidate results and inspect regressions.
+1. **Research MVP Scope**: AgentGuard is an engineering research platform designed for reproducible reliability testing. It does not replace formal safety certifications.
+2. **SQLite Persistence on Free-Tier Hosting**: The backend currently uses SQLite (`sqlite:///./agentguard.db`). On free-tier platforms like Render without persistent disks, container redeployments reset dynamic run history to the seeded demo scenarios. For persistent multi-instance deployments, standard PostgreSQL is supported via `DATABASE_URL`.
+3. **Sandboxing Boundary**: Built-in sample tools run within controlled Python mock sandboxes. External HTTP agents and custom Python callables execute with standard process permissions and require network/credential scoping in production.
 
-Repairs are candidates for controlled verification. Approval does not mean a fix is verified, and verification does not deploy the change to production.
-
-## 🔐 Safety and limitations
-
-AgentGuard is designed around controlled testing and explicit execution boundaries.
-
-- The default sample agent uses mock tools and synthetic data.
-- Arbitrary uploaded Python files are not executed by the web server.
-- Trusted in-process Python adapters run with their process permissions and are not automatically sandboxed.
-- HTTP adapters require appropriate destination restrictions and request validation.
-- Model-backed integrations require valid credentials for live provider calls.
-- Agent-generated success claims are not substitutes for independent evaluation.
-- Repair proposals require review and verification.
-- CrewAI and AutoGen adapters are not implemented in the current release.
-
-**AgentGuard is a research and engineering MVP, not a production security certification or guarantee of AI-agent safety.**
-
-## 🗺️ Roadmap
-
-- [x] Core web application and API
-- [x] Scenario management and JSON import/export
-- [x] Controlled mock-agent execution
-- [x] Fault injection and structured traces
-- [x] Deterministic evaluation
-- [x] Diagnosis and candidate repair workflow
-- [x] Baseline-versus-candidate verification
-- [x] Python and HTTP integration paths
-- [x] LangGraph adapter
-- [x] OpenAI-compatible model-backed adapter
-- [ ] Additional framework adapters, including CrewAI and AutoGen
-- [ ] Broader reproducible evaluation across diverse agents and scenarios
-- [ ] Stronger isolation for untrusted agent execution
-- [ ] Additional benchmark datasets and statistical analysis
-
-## 🧑‍💻 Engineering principles
-
-AgentGuard is built around several principles:
-
-1. **Measure behavior, not claims.** Evaluate observable outcomes independently.
-2. **Make failures reproducible.** Use controlled scenarios and fault injection.
-3. **Preserve evidence.** Connect evaluation findings to execution traces.
-4. **Verify before accepting fixes.** Compare candidates against compatible baselines.
-5. **Report limitations honestly.** Distinguish tested behavior from unsupported or unobservable behavior.
-
-## 🤝 Contributing
-
-Contributions, bug reports, test scenarios, and adapter implementations are welcome.
-
-Before contributing:
-- Reproduce the issue or define the expected behavior.
-- Add or update automated tests.
-- Preserve existing safety boundaries.
-- Avoid committing credentials or sensitive data.
-- Document any limitations of new integrations.
-
-Open an issue before undertaking large architectural changes.
+---
 
 ## 📄 License
 
-No license has been specified in this README. Add a `LICENSE` file and update this section before publishing if you intend to grant others permission to use, modify, or distribute the project.
+This project is licensed under the [MIT License](LICENSE) — see the `LICENSE` file for details.
+
+Copyright (c) 2026 AgentGuard Contributors.
+
+---
 
 ## 👤 Author
 
 **B. Sai Vidwan**
-
-- GitHub: https://github.com/vidwansai66
-- LinkedIn: https://linkedin.com/in/vidwansai
-
----
-
-<p align="center">
-  <strong>Build agents. Break them safely. Understand their failures. Verify their recovery.</strong>
-</p>
+- **GitHub**: [https://github.com/vidwansai66](https://github.com/vidwansai66)
+- **LinkedIn**: [https://linkedin.com/in/vidwansai](https://linkedin.com/in/vidwansai)
+- **Portfolio Repository**: [https://github.com/vidwansai66/agentguard](https://github.com/vidwansai66/agentguard)

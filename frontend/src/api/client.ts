@@ -18,7 +18,7 @@ import {
   FrameworkCatalogItem
 } from '../types';
 
-const getApiBase = (): string => {
+export const getApiBase = (): string => {
   const meta = import.meta as any;
   const envUrl = (meta?.env?.VITE_API_URL || meta?.env?.VITE_API_BASE_URL || '').trim();
 
@@ -36,9 +36,9 @@ const getApiBase = (): string => {
   return '/api';
 };
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
-class ApiClient {
+export class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
     const headers = {
