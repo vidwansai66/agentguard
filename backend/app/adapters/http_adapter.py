@@ -481,6 +481,7 @@ class HttpAgentAdapter(AgentAdapter):
                     status_path = self.response_mapping.get("status_path")
                     error_path = self.response_mapping.get("error_path")
                     ticket_id_path = self.response_mapping.get("ticket_id_path")
+                    is_duplicate_path = self.response_mapping.get("is_duplicate_path")
 
                     if result_path:
                         result_val = _extract_json_path(result_data, result_path)
@@ -490,6 +491,10 @@ class HttpAgentAdapter(AgentAdapter):
                         error_val = _extract_json_path(result_data, error_path)
                     if ticket_id_path:
                         ticket_id_val = _extract_json_path(result_data, ticket_id_path)
+                    if is_duplicate_path:
+                        is_duplicate_val = _extract_json_path(result_data, is_duplicate_path)
+                    else:
+                        is_duplicate_val = result_data.get("is_duplicate")
 
                     # Fallbacks if paths weren't strictly resolved
                     if result_val is None:
@@ -500,6 +505,8 @@ class HttpAgentAdapter(AgentAdapter):
                         error_val = result_data.get("error")
                     if ticket_id_val is None and not ticket_id_path:
                         ticket_id_val = result_data.get("ticket_id")
+                    if is_duplicate_val is None and not is_duplicate_path:
+                        is_duplicate_val = result_data.get("is_duplicate")
 
                     # Check for mapping failure
                     if status_path and status_val is None:
@@ -513,6 +520,7 @@ class HttpAgentAdapter(AgentAdapter):
                     result_val = result_data.get("message") or result_data.get("output") or result_data.get("result") or "Completed by HTTP agent"
                     error_val = result_data.get("error")
                     ticket_id_val = result_data.get("ticket_id")
+                    is_duplicate_val = result_data.get("is_duplicate")
 
                 # Handle response-mapping failure
                 if mapping_failed:
@@ -573,6 +581,7 @@ class HttpAgentAdapter(AgentAdapter):
                     "raw_status": status_val,
                     "result_summary": sanitize_text(str(result_val)[:300]) if result_val is not None else None,
                     "ticket_id": ticket_id_val,
+                    "is_duplicate": is_duplicate_val,
                     "error": sanitize_text(str(error_val)) if error_val is not None else None,
                     "response_keys": list(result_data.keys()),
                     "content_type": resp.headers.get("content-type", "")
@@ -601,6 +610,7 @@ class HttpAgentAdapter(AgentAdapter):
                     "status": final_task_status,
                     "status_code": resp.status_code,
                     "ticket_id": ticket_id_val,
+                    "is_duplicate": is_duplicate_val,
                     "disrupted": result_data.get("disrupted", not is_task_success),
                     "recovered": result_data.get("recovered", False),
                     "retries_used": result_data.get("retries_used", 0),

@@ -116,6 +116,7 @@ class SampleTicketAgent(AgentAdapter):
                     return {
                         "status": "success",
                         "ticket_id": existing_id,
+                        "is_duplicate": True,
                         "disrupted": False,
                         "recovered": True,
                         "retries_used": 0,
@@ -169,6 +170,7 @@ class SampleTicketAgent(AgentAdapter):
                         )
 
                 ticket_id = res.get("ticket_id")
+                is_duplicate = res.get("is_duplicate", False)
                 if disrupted:
                     recovered = True
 
@@ -179,6 +181,7 @@ class SampleTicketAgent(AgentAdapter):
                 return {
                     "status": "success",
                     "ticket_id": ticket_id,
+                    "is_duplicate": is_duplicate,
                     "disrupted": disrupted,
                     "recovered": recovered,
                     "retries_used": retries_used,

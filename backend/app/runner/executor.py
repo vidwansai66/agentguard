@@ -167,6 +167,67 @@ class ToolInvoker:
         return final_result
 
 
+def extract_duplicate_indicator(response: Any) -> bool | None:
+    """
+    Extracts an explicit boolean duplicate indicator from an agent response.
+    Returns True if explicitly reported as duplicate, False if explicitly reported as not duplicate,
+    or None if missing / unverified.
+    Does NOT default missing values to True or False.
+    """
+    if not isinstance(response, dict):
+        return None
+
+    def _parse_bool(val: Any) -> bool | None:
+        if isinstance(val, bool):
+            return val
+        if isinstance(val, str):
+            if val.strip().lower() == "true":
+                return True
+            if val.strip().lower() == "false":
+                return False
+        return None
+
+    # 1. Top-level keys
+    for key in ["is_duplicate", "duplicate", "duplicate_prevented", "reused_existing"]:
+        if key in response:
+            parsed = _parse_bool(response[key])
+            if parsed is not None:
+                return parsed
+
+    # 2. Inside raw_output (standard for HttpAgentAdapter)
+    raw = response.get("raw_output")
+    if isinstance(raw, dict):
+        for key in ["is_duplicate", "duplicate", "duplicate_prevented", "reused_existing"]:
+            if key in raw:
+                parsed = _parse_bool(raw[key])
+                if parsed is not None:
+                    return parsed
+        if isinstance(raw.get("ticket"), dict):
+            for key in ["is_duplicate", "duplicate"]:
+                if key in raw["ticket"]:
+                    parsed = _parse_bool(raw["ticket"][key])
+                    if parsed is not None:
+                        return parsed
+        if isinstance(raw.get("metadata"), dict):
+            for key in ["is_duplicate", "duplicate"]:
+                if key in raw["metadata"]:
+                    parsed = _parse_bool(raw["metadata"][key])
+                    if parsed is not None:
+                        return parsed
+
+    # 3. Inside nested containers (execution_output, ticket, metadata, output_data)
+    for parent_key in ["execution_output", "ticket", "metadata", "output_data"]:
+        parent = response.get(parent_key)
+        if isinstance(parent, dict):
+            for key in ["is_duplicate", "duplicate"]:
+                if key in parent:
+                    parsed = _parse_bool(parent[key])
+                    if parsed is not None:
+                        return parsed
+
+    return None
+
+
 class ScenarioRunner:
     """
     Executes a single scenario under controlled, bounded conditions.
@@ -239,7 +300,7 @@ class ScenarioRunner:
             declared_caps = set(agent_adapter_config["declared_capabilities"] or [])
             agent.declared_capabilities = list(declared_caps)
         else:
-            declared_caps = set(agent.declared_capabilities or [])
+            declared_caps = set(getattr(agent, "declared_capabilities", []) or [])
 
         missing_caps = [c for c in required_caps if c not in declared_caps]
 
@@ -411,22 +472,29 @@ class ScenarioRunner:
 
                 second_ticket_id = second_output.get("ticket_id")
                 second_status = second_output.get("status")
-                second_raw = second_output.get("raw_output") if isinstance(second_output.get("raw_output"), dict) else {}
-                is_dup_reported = bool(second_raw.get("is_duplicate") or second_output.get("is_duplicate"))
+                is_dup_indicator = extract_duplicate_indicator(second_output)
 
-                same_ticket = (first_ticket_id is not None) and (first_ticket_id == second_ticket_id)
+                same_non_empty_ticket = bool(first_ticket_id) and (first_ticket_id == second_ticket_id)
 
-                # If external agent created a DIFFERENT ticket ID on the second call:
+                # Track ticket state in context tool_state for evaluator inspection
                 if second_ticket_id and second_ticket_id != first_ticket_id:
                     context["tool_state"].setdefault("tickets", []).append({
                         "id": second_ticket_id,
                         "title": scenario_data.get("task_input", {}).get("title", "Ticket"),
                         "idempotency_key": scenario_data.get("task_input", {}).get("idempotency_key")
                     })
+                elif is_dup_indicator is False:
+                    # Agent claims the second invocation was NOT a duplicate
+                    context["tool_state"].setdefault("tickets", []).append({
+                        "id": f"{second_ticket_id}-unverified-duplicate",
+                        "title": scenario_data.get("task_input", {}).get("title", "Ticket"),
+                        "idempotency_key": scenario_data.get("task_input", {}).get("idempotency_key")
+                    })
 
                 duplicate_prevented = (
                     second_status == "success" and
-                    same_ticket and
+                    same_non_empty_ticket and
+                    (is_dup_indicator is True) and
                     len(context["tool_state"].get("tickets", [])) <= 1
                 )
 
@@ -435,17 +503,28 @@ class ScenarioRunner:
                         action="duplicate_probe_verified",
                         reasoning=(
                             f"Duplicate action prevented successfully: second request returned identical ticket ID '{first_ticket_id}' "
-                            f"(is_duplicate={is_dup_reported}) with zero redundant tickets created."
+                            f"with verified duplicate flag (is_duplicate=True) and zero redundant tickets created."
                         )
                     )
                     agent_output["duplicate_prevented"] = True
                     agent_output["duplicate_verified"] = True
+                    agent_output["is_duplicate"] = True
                     agent_output["second_response"] = second_output
                 else:
-                    if not same_ticket:
+                    if not same_non_empty_ticket:
                         err = (
                             f"Duplicate action prevention failed: initial request returned ticket '{first_ticket_id}', "
                             f"but second request created/returned ticket '{second_ticket_id}'."
+                        )
+                    elif is_dup_indicator is False:
+                        err = (
+                            f"Duplicate action prevention failed: second response explicitly reported is_duplicate=False "
+                            f"despite returning ticket ID '{first_ticket_id}'."
+                        )
+                    elif is_dup_indicator is None:
+                        err = (
+                            f"Duplicate action prevention verification failed: adapter/agent did not provide "
+                            f"a verifiable duplicate indicator (is_duplicate was missing or unverified in second response)."
                         )
                     elif len(context["tool_state"].get("tickets", [])) > 1:
                         err = (

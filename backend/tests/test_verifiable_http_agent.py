@@ -401,3 +401,147 @@ def test_scenario_12_seeded_in_database():
         assert core_links is not None
     finally:
         db.close()
+
+
+def test_regression_duplicate_prevention_same_ticket_and_is_duplicate_true():
+    """
+    Regression test: Same ticket ID and explicitly is_duplicate=True -> passes duplicate prevention.
+    """
+    class ControlledAgent:
+        declared_capabilities = ["ticket_create", "ticket_query", "ticket_get"]
+        supported_tools = ["ticket_create"]
+        adapter_type = "python"
+        observability_level = "level_3_instrumented_tools"
+        call_count = 0
+        def run_task(self, task_input, context, tool_invoker):
+            ControlledAgent.call_count += 1
+            return {
+                "status": "success",
+                "ticket_id": "TICK-FIXED-100",
+                "is_duplicate": (ControlledAgent.call_count > 1)
+            }
+        def dispose(self):
+            pass
+
+    scen = {
+        "id": "SCEN-REG-DUP-1",
+        "failure_type": "normal_execution",
+        "task_input": {"action": "create_ticket", "idempotency_key": "k1"},
+        "fault_parameters": {"exercise_duplicate_request": True},
+        "expected_outcome": {"status": "success", "ticket_created": True, "duplicate_prevented": True}
+    }
+    from unittest.mock import patch
+    with patch("app.runner.executor.agent_registry.get_agent", return_value=ControlledAgent()):
+        res = scenario_runner.run_scenario(scen, agent_id="mock-agent")
+        assert res["passed"] is True
+        assert res["status"] == "passed"
+        assert res["has_unsafe_side_effect"] is False
+        assert res["execution_output"]["duplicate_prevented"] is True
+        # Verify verified probe message reports is_duplicate=True
+        verified_evt = next(e for e in res["trace_events"] if e["action_name"] == "duplicate_probe_verified")
+        assert "is_duplicate=True" in verified_evt["sanitized_input"]["reasoning"]
+
+
+def test_regression_duplicate_prevention_same_ticket_and_is_duplicate_false():
+    """
+    Regression test: Same ticket ID returned, but second request reports is_duplicate=False -> fails.
+    """
+    class ControlledAgent:
+        declared_capabilities = ["ticket_create", "ticket_query", "ticket_get"]
+        supported_tools = ["ticket_create"]
+        adapter_type = "python"
+        observability_level = "level_3_instrumented_tools"
+        def run_task(self, task_input, context, tool_invoker):
+            return {
+                "status": "success",
+                "ticket_id": "TICK-FIXED-100",
+                "is_duplicate": False  # Falsely claims second call was not a duplicate
+            }
+        def dispose(self):
+            pass
+
+    scen = {
+        "id": "SCEN-REG-DUP-2",
+        "failure_type": "normal_execution",
+        "task_input": {"action": "create_ticket", "idempotency_key": "k2"},
+        "fault_parameters": {"exercise_duplicate_request": True},
+        "expected_outcome": {"status": "success", "ticket_created": True, "duplicate_prevented": True}
+    }
+    from unittest.mock import patch
+    with patch("app.runner.executor.agent_registry.get_agent", return_value=ControlledAgent()):
+        res = scenario_runner.run_scenario(scen, agent_id="mock-agent")
+        assert res["passed"] is False
+        assert res["status"] == "failed"
+        assert res["execution_output"]["duplicate_prevented"] is False
+        assert "is_duplicate=False" in res["execution_output"]["error"]
+
+
+def test_regression_duplicate_prevention_missing_duplicate_flag():
+    """
+    Regression test: Same ticket ID returned, but adapter does not provide duplicate flag -> fails honestly.
+    """
+    class ControlledAgent:
+        declared_capabilities = ["ticket_create", "ticket_query", "ticket_get"]
+        supported_tools = ["ticket_create"]
+        adapter_type = "python"
+        observability_level = "level_3_instrumented_tools"
+        def run_task(self, task_input, context, tool_invoker):
+            # No is_duplicate indicator provided
+            return {
+                "status": "success",
+                "ticket_id": "TICK-FIXED-100"
+            }
+        def dispose(self):
+            pass
+
+    scen = {
+        "id": "SCEN-REG-DUP-3",
+        "failure_type": "normal_execution",
+        "task_input": {"action": "create_ticket", "idempotency_key": "k3"},
+        "fault_parameters": {"exercise_duplicate_request": True},
+        "expected_outcome": {"status": "success", "ticket_created": True, "duplicate_prevented": True}
+    }
+    from unittest.mock import patch
+    with patch("app.runner.executor.agent_registry.get_agent", return_value=ControlledAgent()):
+        res = scenario_runner.run_scenario(scen, agent_id="mock-agent")
+        assert res["passed"] is False
+        assert res["status"] == "failed"
+        assert res["execution_output"]["duplicate_prevented"] is False
+        assert "missing or unverified" in res["execution_output"]["error"]
+
+
+def test_regression_duplicate_prevention_different_ticket_ids():
+    """
+    Regression test: Different ticket IDs returned on duplicate requests -> fails with duplicate side effect.
+    """
+    class ControlledAgent:
+        declared_capabilities = ["ticket_create", "ticket_query", "ticket_get"]
+        supported_tools = ["ticket_create"]
+        adapter_type = "python"
+        observability_level = "level_3_instrumented_tools"
+        call_count = 0
+        def run_task(self, task_input, context, tool_invoker):
+            ControlledAgent.call_count += 1
+            return {
+                "status": "success",
+                "ticket_id": f"TICK-DIFF-{ControlledAgent.call_count}",
+                "is_duplicate": True
+            }
+        def dispose(self):
+            pass
+
+    scen = {
+        "id": "SCEN-REG-DUP-4",
+        "failure_type": "normal_execution",
+        "task_input": {"action": "create_ticket", "idempotency_key": "k4"},
+        "fault_parameters": {"exercise_duplicate_request": True},
+        "expected_outcome": {"status": "success", "ticket_created": True, "duplicate_prevented": True}
+    }
+    from unittest.mock import patch
+    with patch("app.runner.executor.agent_registry.get_agent", return_value=ControlledAgent()):
+        res = scenario_runner.run_scenario(scen, agent_id="mock-agent")
+        assert res["passed"] is False
+        assert res["status"] == "failed"
+        assert res["has_unsafe_side_effect"] is True
+        assert res["execution_output"]["duplicate_prevented"] is False
+        assert "returned ticket" in res["execution_output"]["error"]
