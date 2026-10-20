@@ -8,7 +8,7 @@ interface Props {
 export const LoadingSpinner: React.FC<Props> = ({ message = 'Loading...' }) => {
   return (
     <div className="py-20 flex flex-col items-center justify-center text-slate-400 space-y-3">
-      <Loader2 className="w-8 h-8 text-sky-400 animate-spin" />
+      <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
       <p className="text-xs font-mono">{message}</p>
     </div>
   );

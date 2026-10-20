@@ -188,7 +188,7 @@ export const DiagnosisPage: React.FC = () => {
                       <span className="px-2 py-0.5 rounded font-mono text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
                         Diagnosis #{idx + 1}
                       </span>
-                      <span className="px-2 py-0.5 rounded font-mono text-[10px] bg-sky-950 text-sky-400 border border-sky-800">
+                      <span className="px-2 py-0.5 rounded font-mono text-[10px] bg-emerald-950/60 text-emerald-400 border border-emerald-800/50">
                         Confidence: {diag.confidence}
                       </span>
                       <span className="text-[11px] font-mono text-slate-500">{diag.id}</span>
@@ -197,7 +197,7 @@ export const DiagnosisPage: React.FC = () => {
                   </div>
 
                   <div className="text-xs font-mono text-slate-400 bg-dark-bg px-3 py-1.5 rounded-lg border border-dark-border">
-                    Recommended: <span className="text-cyan-400 font-semibold">{diag.recommended_strategy}</span>
+                    Recommended: <span className="text-teal-400 font-semibold">{diag.recommended_strategy}</span>
                   </div>
                 </div>
 
@@ -216,7 +216,7 @@ export const DiagnosisPage: React.FC = () => {
 
                   <div className="p-4 rounded-xl bg-dark-bg/60 border border-dark-border space-y-2">
                     <h4 className="font-semibold text-slate-300 flex items-center gap-2 font-mono">
-                      <ShieldAlert className="w-4 h-4 text-cyan-400" />
+                      <ShieldAlert className="w-4 h-4 text-emerald-400" />
                       <span>Empirical Evidence References</span>
                     </h4>
                     <pre className="p-2.5 rounded bg-dark-card border border-dark-border text-slate-300 text-[11px] overflow-x-auto font-mono">
@@ -264,7 +264,7 @@ export const DiagnosisPage: React.FC = () => {
                             <button
                               onClick={() => handleApprove(correspondingPatch.id)}
                               disabled={actionLoading === correspondingPatch.id}
-                              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"
+                              className="px-3.5 py-1.5 rounded-lg btn-tactile-brand text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"
                             >
                               <ThumbsUp className="w-3.5 h-3.5" />
                               <span>Approve Candidate Fix</span>
@@ -276,7 +276,7 @@ export const DiagnosisPage: React.FC = () => {
                           <button
                             onClick={() => handleVerify(correspondingPatch.id)}
                             disabled={actionLoading === correspondingPatch.id}
-                            className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-brand-600/25"
+                            className="px-4 py-2 rounded-lg btn-tactile-brand text-white text-xs font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-600/25"
                           >
                             <GitCompare className="w-4 h-4" />
                             <span>
@@ -290,7 +290,7 @@ export const DiagnosisPage: React.FC = () => {
                         {correspondingPatch.comparison_id && (
                           <Link
                             to={`/comparison?comparison_id=${correspondingPatch.comparison_id}`}
-                            className="px-3 py-1.5 rounded-lg bg-dark-card hover:bg-dark-hover border border-dark-border text-sky-400 text-xs font-semibold flex items-center gap-1.5"
+                            className="px-3 py-1.5 rounded-lg bg-dark-card hover:bg-dark-hover border border-dark-border text-emerald-400 text-xs font-semibold flex items-center gap-1.5"
                           >
                             <span>View Comparison Report</span>
                             <ArrowRight className="w-3.5 h-3.5" />

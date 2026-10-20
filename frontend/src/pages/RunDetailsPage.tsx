@@ -114,7 +114,7 @@ export const RunDetailsPage: React.FC = () => {
             <StatusBadge status={run.status} />
             <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase ${
               run.observability_level === 'level_1_result_only'
-                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                ? 'bg-teal-500/10 text-teal-400 border border-teal-500/30'
                 : run.observability_level === 'level_2_structured_events'
                 ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
                 : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
@@ -183,7 +183,7 @@ export const RunDetailsPage: React.FC = () => {
 
         <div className="p-4 rounded-xl bg-dark-card border border-dark-border">
           <span className="text-slate-400 text-xs">Recovered Runs</span>
-          <div className="text-xl font-bold font-mono text-cyan-400 mt-1">
+          <div className="text-xl font-bold font-mono text-teal-400 mt-1">
             {run.recovered_count} / {run.disrupted_count || 0}
           </div>
         </div>
@@ -192,7 +192,7 @@ export const RunDetailsPage: React.FC = () => {
       {/* Filter Ribbon */}
       <div className="p-4 rounded-xl bg-dark-card border border-dark-border flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-          <Filter className="w-3.5 h-3.5 text-cyan-400" />
+          <Filter className="w-3.5 h-3.5 text-emerald-400" />
           <span>Event Type:</span>
           <select
             value={filterType}
@@ -246,7 +246,7 @@ export const RunDetailsPage: React.FC = () => {
 
               let badgeColor = 'bg-slate-800 text-slate-300 border-slate-700';
               if (event.event_type === 'fault_injected') badgeColor = 'bg-rose-500/20 text-rose-300 border-rose-500/40';
-              if (event.event_type === 'tool_call') badgeColor = 'bg-sky-500/20 text-sky-300 border-sky-500/40';
+              if (event.event_type === 'tool_call') badgeColor = 'bg-teal-500/20 text-teal-300 border-teal-500/40';
               if (event.event_type === 'tool_response') badgeColor = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
               if (event.event_type === 'agent_decision') badgeColor = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40';
 

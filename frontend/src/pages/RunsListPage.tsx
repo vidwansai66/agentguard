@@ -76,13 +76,13 @@ export const RunsListPage: React.FC = () => {
                   <td className="py-3.5 px-4">
                     <div className="font-mono text-xs text-slate-200">{r.agent_id}</div>
                     <div className="flex items-center gap-1.5 mt-1">
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-dark-bg border border-dark-border text-sky-400">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-dark-bg border border-dark-border text-emerald-400">
                         v{r.agent_version}
                       </span>
                       {r.observability_level && (
                         <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-semibold border ${
                           r.observability_level === 'level_1_result_only'
-                            ? 'bg-blue-950/60 text-blue-400 border-blue-800/40'
+                            ? 'bg-teal-950/60 text-teal-400 border-teal-800/40'
                             : r.observability_level === 'level_2_structured_events'
                             ? 'bg-purple-950/60 text-purple-400 border-purple-800/40'
                             : 'bg-emerald-950/60 text-emerald-400 border-emerald-800/40'

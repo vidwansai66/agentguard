@@ -230,7 +230,7 @@ export const ScenariosPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-            <Filter className="w-3.5 h-3.5 text-cyan-400" />
+            <Filter className="w-3.5 h-3.5 text-emerald-400" />
             <span>Fault Category:</span>
             <select
               value={failureTypeFilter}
@@ -278,7 +278,7 @@ export const ScenariosPage: React.FC = () => {
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-mono text-[11px] text-sky-400 font-semibold bg-sky-950/60 px-2 py-0.5 rounded border border-sky-800/40">
+                  <span className="font-mono text-[11px] text-emerald-400 font-semibold bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/40">
                     {scen.id}
                   </span>
                   <div className="flex items-center gap-2">
@@ -350,7 +350,7 @@ export const ScenariosPage: React.FC = () => {
             <div className="flex items-start justify-between border-b border-dark-border pb-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-xs text-sky-400">{inspectScenario.id}</span>
+                  <span className="font-mono text-xs text-emerald-400 font-semibold">{inspectScenario.id}</span>
                   <SeverityBadge severity={inspectScenario.severity} />
                   <span className="text-xs font-mono text-slate-400">v{inspectScenario.version}</span>
                 </div>
@@ -373,7 +373,7 @@ export const ScenariosPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 rounded-lg bg-dark-bg border border-dark-border space-y-1">
                   <span className="text-slate-500 font-mono">Fault Injection Category</span>
-                  <div className="font-semibold text-cyan-400 font-mono">{inspectScenario.failure_type}</div>
+                  <div className="font-semibold text-teal-400 font-mono">{inspectScenario.failure_type}</div>
                 </div>
                 <div className="p-3 rounded-lg bg-dark-bg border border-dark-border space-y-1">
                   <span className="text-slate-500 font-mono">Execution Limits</span>
@@ -392,7 +392,7 @@ export const ScenariosPage: React.FC = () => {
 
               <div>
                 <h4 className="font-semibold text-slate-300 mb-1 font-mono">Fault Parameters</h4>
-                <pre className="p-3 rounded-lg bg-dark-bg border border-dark-border font-mono text-[11px] text-cyan-300 overflow-x-auto">
+                <pre className="p-3 rounded-lg bg-dark-bg border border-dark-border font-mono text-[11px] text-teal-300 overflow-x-auto">
                   {JSON.stringify(inspectScenario.fault_parameters, null, 2)}
                 </pre>
               </div>

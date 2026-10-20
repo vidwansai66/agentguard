@@ -95,14 +95,14 @@ export const DashboardPage: React.FC = () => {
           </button>
           <Link
             to="/scenarios"
-            className="px-3.5 py-2 rounded-lg bg-dark-card border border-dark-border hover:bg-dark-hover text-slate-200 text-xs font-semibold flex items-center gap-2 transition-all"
+            className="btn-uiverse text-xs font-semibold flex items-center gap-2"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Manage Scenarios</span>
           </Link>
           <Link
             to="/execution"
-            className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-md shadow-brand-600/20"
+            className="btn-tactile-brand flex items-center gap-2"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Run Test Suite</span>
@@ -116,7 +116,7 @@ export const DashboardPage: React.FC = () => {
         <div className="p-4 rounded-xl bg-dark-card border border-dark-border shadow-sm">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
             <span>Total Runs</span>
-            <Activity className="w-4 h-4 text-sky-400" />
+            <Activity className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-white font-mono">{stats?.total_runs || 0}</div>
           <p className="text-[11px] text-slate-500 mt-1">Across all test suites</p>
@@ -138,9 +138,9 @@ export const DashboardPage: React.FC = () => {
         <div className="p-4 rounded-xl bg-dark-card border border-dark-border shadow-sm">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
             <span>Recovery Rate</span>
-            <RotateCcw className="w-4 h-4 text-cyan-400" />
+            <RotateCcw className="w-4 h-4 text-teal-400" />
           </div>
-          <div className="text-2xl font-bold text-cyan-400 font-mono">
+          <div className="text-2xl font-bold text-teal-400 font-mono">
             {((stats?.recovery_rate || 0) * 100).toFixed(1)}%
           </div>
           <p className="text-[11px] text-slate-500 mt-1">Under tool disruption</p>
@@ -203,7 +203,7 @@ export const DashboardPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-sky-400" />
+                    <TrendingUp className="w-4 h-4 text-emerald-400" />
                     <span>Run Success & Safety Trends</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">Chronological succession of recent test runs</p>
@@ -240,7 +240,7 @@ export const DashboardPage: React.FC = () => {
             <div className="p-5 rounded-2xl bg-dark-card border border-dark-border space-y-4">
               <div>
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <BarChart3 className="w-4 h-4 text-cyan-400" />
+                  <BarChart3 className="w-4 h-4 text-emerald-400" />
                   <span>Outcomes by Failure Category</span>
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">Distribution across the 6 fault injection categories</p>
@@ -309,7 +309,7 @@ export const DashboardPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4">
                         <span className="font-mono text-slate-300">{run.agent_id}</span>
-                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-sky-400 font-mono">
+                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 font-mono">
                           {run.agent_version}
                         </span>
                       </td>

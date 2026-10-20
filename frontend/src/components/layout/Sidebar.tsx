@@ -8,7 +8,8 @@ import {
   Clock,
   Wrench,
   GitCompare,
-  Settings
+  Settings,
+  ShieldCheck
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -24,7 +25,7 @@ const NAV_ITEMS = [
 
 export const Sidebar: React.FC = () => {
   return (
-    <aside className="w-64 border-r border-dark-border bg-dark-bg/95 flex flex-col justify-between p-4 shrink-0">
+    <aside className="w-64 border-r border-dark-border bg-dark-bg/95 flex flex-col justify-between p-4 shrink-0 transition-colors duration-200">
       <div className="space-y-6">
         <div className="px-3 py-1">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 font-mono">
@@ -43,8 +44,8 @@ export const Sidebar: React.FC = () => {
                 className={({ isActive }) =>
                   `flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all ${
                     isActive
-                      ? 'bg-brand-500/15 text-brand-400 border border-brand-500/30 shadow-sm shadow-brand-500/10'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-dark-card/60'
+                      ? 'bg-brand-500/15 text-brand-600 dark:text-brand-400 border border-brand-500/30 shadow-sm shadow-brand-500/10 font-semibold'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-dark-card/60'
                   }`
                 }
               >
@@ -56,11 +57,14 @@ export const Sidebar: React.FC = () => {
         </nav>
       </div>
 
-      {/* Research question callout banner */}
-      <div className="p-3.5 rounded-xl bg-dark-card border border-dark-border/80 text-xs space-y-2">
-        <div className="flex items-center gap-2 text-cyan-400 font-semibold">
-          <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-          <span>Core Hypothesis</span>
+      {/* Security core hypothesis callout banner */}
+      <div className="p-3.5 rounded-xl bg-dark-card border border-dark-border/80 text-xs space-y-2 shadow-sm transition-colors">
+        <div className="flex items-center gap-2 text-emerald-400 font-semibold">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Security Invariant</span>
+          </span>
         </div>
         <p className="text-slate-400 text-[11px] leading-relaxed">
           State-aware recovery & safety checks eliminate tool failure side effects without unbounded latency.

@@ -504,8 +504,8 @@ export const AgentsPage: React.FC = () => {
     switch (level) {
       case 'level_1_result_only':
         return (
-          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase bg-blue-500/10 text-blue-400 border border-blue-500/30 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase bg-teal-500/10 text-teal-400 border border-teal-500/30 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-400"></span>
             Level 1: Result-Only
           </span>
         );
@@ -548,7 +548,7 @@ export const AgentsPage: React.FC = () => {
               setConnectError(null);
               setShowConnectModal(true);
             }}
-            className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center gap-2 transition-all shadow-md shadow-brand-600/25"
+            className="btn-tactile-brand flex items-center gap-2"
           >
             <Link2 className="w-4 h-4" />
             <span>Connect Existing Agent</span>
@@ -560,9 +560,9 @@ export const AgentsPage: React.FC = () => {
               setRegisterError(null);
               setShowRegisterModal(true);
             }}
-            className="px-4 py-2.5 rounded-xl bg-dark-card border border-dark-border hover:bg-dark-hover text-slate-200 font-semibold text-xs flex items-center gap-2 transition-all"
+            className="btn-uiverse text-xs font-semibold flex items-center gap-2"
           >
-            <Plus className="w-4 h-4 text-brand-400" />
+            <Plus className="w-4 h-4" />
             <span>Register Custom Agent</span>
           </button>
         </div>
@@ -601,7 +601,7 @@ export const AgentsPage: React.FC = () => {
                             ? 'bg-amber-950/80 border border-amber-800/60 text-amber-400'
                             : isSdk
                             ? 'bg-purple-950/80 border border-purple-800/60 text-purple-400'
-                            : 'bg-sky-950/80 border border-sky-800/60 text-sky-400'
+                            : 'bg-emerald-950/80 border border-emerald-800/60 text-emerald-400'
                         }`}
                       >
                         {isHttp ? <Server className="w-5 h-5" /> : isSdk ? <Link2 className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
@@ -624,7 +624,7 @@ export const AgentsPage: React.FC = () => {
                       <span
                         className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-semibold uppercase ${
                           isConnected
-                            ? 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                            ? 'bg-teal-950 text-teal-300 border border-teal-800'
                             : agent.registration_source === 'custom'
                             ? 'bg-indigo-950 text-indigo-300 border border-indigo-800'
                             : 'bg-slate-800 text-slate-400'
@@ -641,7 +641,7 @@ export const AgentsPage: React.FC = () => {
 
                   <div className="mt-3 pt-2.5 border-t border-dark-border/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 font-mono">
                     {renderObservabilityBadge(agent.observability_level)}
-                    <span className="text-sky-400 font-semibold">{agent.current_version}</span>
+                    <span className="text-emerald-400 font-semibold">{agent.current_version}</span>
                   </div>
                 </div>
               );
@@ -650,11 +650,11 @@ export const AgentsPage: React.FC = () => {
 
           <div className="p-4 rounded-xl bg-dark-bg/60 border border-dark-border/80 text-xs text-slate-400 space-y-2">
             <h4 className="font-semibold text-slate-300 flex items-center gap-1.5">
-              <Shield className="w-4 h-4 text-sky-400" />
+              <Shield className="w-4 h-4 text-emerald-400" />
               <span>Observability Levels</span>
             </h4>
             <div className="text-[11px] space-y-1.5 leading-relaxed">
-              <p><strong className="text-blue-300">Level 1 (Result-Only):</strong> Evaluates final answer & prompt defense. Tool-level fault injection is not supported.</p>
+              <p><strong className="text-teal-300">Level 1 (Result-Only):</strong> Evaluates final answer & prompt defense. Tool-level fault injection is not supported.</p>
               <p><strong className="text-purple-300">Level 2 (Structured-Events):</strong> External agent returns execution steps & timings for timeline inspection.</p>
               <p><strong className="text-emerald-300">Level 3 (Instrumented-Tools):</strong> Tool calls are intercepted by AgentGuard for controlled fault injection.</p>
             </div>
@@ -670,7 +670,7 @@ export const AgentsPage: React.FC = () => {
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="text-lg font-bold text-white">{selectedAgent.name}</h2>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-sky-950 text-sky-300 border border-sky-800">
+                    <span className="px-2 py-0.5 rounded-full text-xs font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">
                       {selectedAgent.adapter_type || 'python'} adapter
                     </span>
                     {renderObservabilityBadge(selectedAgent.observability_level)}
@@ -694,9 +694,9 @@ export const AgentsPage: React.FC = () => {
                   <button
                     onClick={handleTestConnection}
                     disabled={isTestingConn}
-                    className="px-3.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border hover:bg-slate-800 text-sky-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
+                    className="px-3.5 py-1.5 rounded-lg bg-dark-bg border border-dark-border hover:bg-slate-800 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
                   >
-                    <Radio className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
+                    <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
                     <span>{isTestingConn ? 'Testing...' : 'Test Connectivity'}</span>
                   </button>
 
@@ -716,7 +716,7 @@ export const AgentsPage: React.FC = () => {
 
               {/* Observability Level Info Banner */}
               <div className="p-3.5 rounded-xl bg-dark-bg border border-dark-border flex items-start gap-3">
-                <Info className="w-4 h-4 text-sky-400 shrink-0 mt-0.5" />
+                <Info className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="text-xs space-y-1">
                   <div className="flex items-center gap-2 font-semibold text-white">
                     <span>Integration Observability Level:</span>
@@ -791,7 +791,7 @@ export const AgentsPage: React.FC = () => {
               {/* Supported Tools List */}
               <div className="pt-3 border-t border-dark-border/60 space-y-2">
                 <h4 className="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1.5">
-                  <Wrench className="w-3.5 h-3.5 text-cyan-400" />
+                  <Wrench className="w-3.5 h-3.5 text-teal-400" />
                   <span>Approved Mock Tools</span>
                 </h4>
                 <div className="flex flex-wrap gap-2">
@@ -847,7 +847,7 @@ export const AgentsPage: React.FC = () => {
                             ver.strategy === 'safe_idempotent'
                               ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                               : ver.strategy === 'bounded_backoff'
-                              ? 'bg-blue-950 text-blue-300 border border-blue-800'
+                              ? 'bg-teal-950 text-teal-300 border border-teal-800'
                               : ver.strategy === 'strict_policy'
                               ? 'bg-purple-950 text-purple-300 border border-purple-800'
                               : 'bg-slate-800 text-slate-300 border border-slate-700'
@@ -869,7 +869,7 @@ export const AgentsPage: React.FC = () => {
                       className="px-3 py-1.5 rounded-lg bg-dark-card border border-dark-border hover:bg-dark-hover text-slate-300 text-xs font-semibold flex items-center gap-1.5 self-start sm:self-auto"
                     >
                       <span>Run Version</span>
-                      <ArrowRight className="w-3 h-3 text-sky-400" />
+                      <ArrowRight className="w-3 h-3 text-emerald-400" />
                     </Link>
                   </div>
                 ))}
@@ -901,7 +901,7 @@ export const AgentsPage: React.FC = () => {
                           <Link to={`/runs/${r.id}`} className="font-mono text-xs font-semibold text-white hover:text-brand-400">
                             {r.id}
                           </Link>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 font-mono text-sky-400">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 font-mono text-emerald-400">
                             v{r.agent_version}
                           </span>
                           <StatusBadge status={r.status} />
@@ -953,11 +953,11 @@ export const AgentsPage: React.FC = () => {
                   onClick={() => setConnType('contract')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
                     connType === 'contract'
-                      ? 'bg-sky-950 border border-sky-700 text-sky-300'
+                      ? 'bg-emerald-950 border border-emerald-700 text-emerald-300'
                       : 'bg-dark-bg border border-dark-border text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <FileText className="w-3.5 h-3.5 text-sky-400" />
+                  <FileText className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Integration Contract</span>
                 </button>
                 <button
@@ -986,7 +986,7 @@ export const AgentsPage: React.FC = () => {
 
                 <div className="p-4 rounded-xl bg-dark-bg border border-dark-border space-y-4 font-mono text-[11px]">
                   <div>
-                    <h5 className="font-sans font-bold text-sky-400 text-xs mb-1">Supported Connection Architecture:</h5>
+                    <h5 className="font-sans font-bold text-emerald-400 text-xs mb-1">Supported Connection Architecture:</h5>
                     <p className="text-slate-400 font-sans leading-relaxed">
                       All integrations map through AgentGuard's common lifecycle operations: 
                       <code className="text-amber-300"> validate_config</code>, <code className="text-amber-300">initialize</code>, <code className="text-amber-300">test_connection</code>, <code className="text-amber-300">run_task</code>, <code className="text-amber-300">cancel</code>, <code className="text-amber-300">dispose</code>.
@@ -995,7 +995,7 @@ export const AgentsPage: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-slate-300 font-sans">
                     <div className="p-3 rounded-lg bg-dark-card border border-dark-border space-y-1">
-                      <p className="font-bold text-blue-300">1. Python Projects (A1 / A2)</p>
+                      <p className="font-bold text-teal-300">1. Python Projects (A1 / A2)</p>
                       <p className="text-slate-400 text-[11px]">CallableAgentWrapper wraps existing Python functions or classes without modifying agent code.</p>
                     </div>
                     <div className="p-3 rounded-lg bg-dark-card border border-dark-border space-y-1">
@@ -1122,16 +1122,16 @@ export const AgentsPage: React.FC = () => {
                         }}
                         className={`p-4 rounded-xl border cursor-pointer transition-all space-y-2 ${
                           connType === 'framework'
-                            ? 'bg-sky-950/40 border-sky-500 shadow-md shadow-sky-500/10'
+                            ? 'bg-emerald-950/40 border-emerald-500 shadow-md shadow-emerald-500/10'
                             : 'bg-dark-bg/60 border-dark-border hover:border-slate-700'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sky-400 font-bold text-xs">
+                          <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs">
                             <Workflow className="w-4 h-4" />
                             <span>3. Agent Framework</span>
                           </div>
-                          <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-sky-950 text-sky-300 border border-sky-800">
+                          <span className="text-[10px] px-2 py-0.5 rounded font-mono bg-emerald-950 text-emerald-300 border border-emerald-800">
                             LangGraph v1.2+
                           </span>
                         </div>
@@ -1257,12 +1257,12 @@ export const AgentsPage: React.FC = () => {
                           onClick={() => setConnObsLevel('level_1_result_only')}
                           className={`p-3 rounded-xl border cursor-pointer transition-all ${
                             connObsLevel === 'level_1_result_only'
-                              ? 'bg-blue-950/40 border-blue-500/80 shadow-md shadow-blue-500/10'
+                              ? 'bg-teal-950/40 border-teal-500/80 shadow-md shadow-teal-500/10'
                               : 'bg-dark-bg/60 border-dark-border hover:border-slate-700'
                           }`}
                         >
-                          <div className="flex items-center gap-1.5 text-blue-300 font-semibold text-xs">
-                            <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                          <div className="flex items-center gap-1.5 text-teal-300 font-semibold text-xs">
+                            <span className="w-2 h-2 rounded-full bg-teal-400"></span>
                             <span>Level 1: Result-Only</span>
                           </div>
                           <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
@@ -1433,7 +1433,7 @@ export const AgentsPage: React.FC = () => {
                     {/* Specific Config: 3. Framework */}
                     {connType === 'framework' && (
                       <div className="p-4 rounded-xl bg-dark-bg border border-dark-border space-y-3">
-                        <h5 className="font-semibold text-sky-400 flex items-center gap-1.5">
+                        <h5 className="font-semibold text-emerald-400 flex items-center gap-1.5">
                           <Workflow className="w-4 h-4" />
                           <span>Agent Framework Settings</span>
                         </h5>
@@ -1577,14 +1577,14 @@ export const AgentsPage: React.FC = () => {
                       <div className="p-4 rounded-xl bg-dark-bg border border-dark-border space-y-3">
                         <div className="flex items-center justify-between">
                           <h5 className="font-semibold text-white flex items-center gap-1.5">
-                            <Shield className="w-4 h-4 text-sky-400" />
+                            <Shield className="w-4 h-4 text-emerald-400" />
                             <span>Configuration Schema Check</span>
                           </h5>
                           <button
                             type="button"
                             onClick={handleValidateConnectConfig}
                             disabled={isConnectValidating}
-                            className="px-3 py-1.5 rounded-lg bg-sky-950/60 hover:bg-sky-900 border border-sky-800 text-sky-300 font-semibold text-[11px]"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-800 text-emerald-300 font-semibold text-[11px]"
                           >
                             {isConnectValidating ? 'Validating...' : 'Run Validation'}
                           </button>
@@ -1743,7 +1743,7 @@ export const AgentsPage: React.FC = () => {
                                     <span className="text-amber-400">Blocked (Requires Level 3 Instrumented Tools, but agent provides {connObsLevel}).</span>
                                   )
                                 ) : (
-                                  <span className="text-blue-400">Non-tool scenario. Evaluated on output and policy compliance.</span>
+                                  <span className="text-teal-400">Non-tool scenario. Evaluated on output and policy compliance.</span>
                                 )}
                               </p>
 
@@ -1827,7 +1827,7 @@ export const AgentsPage: React.FC = () => {
                           <div className="grid grid-cols-2 gap-2 text-[11px]">
                             <div><span className="text-slate-400">Agent ID:</span> <span className="font-mono text-white">{connId}</span></div>
                             <div><span className="text-slate-400">Name:</span> <span className="text-white font-semibold">{connName}</span></div>
-                            <div><span className="text-slate-400">Adapter Type:</span> <span className="font-mono text-sky-400">{connType}</span></div>
+                            <div><span className="text-slate-400">Adapter Type:</span> <span className="font-mono text-emerald-400">{connType}</span></div>
                             <div><span className="text-slate-400">Observability Level:</span> <span className="font-mono text-emerald-400">{connObsLevel}</span></div>
                           </div>
                         </div>
@@ -1904,12 +1904,12 @@ export const AgentsPage: React.FC = () => {
                     }}
                     className={`p-3.5 rounded-xl border cursor-pointer transition-all ${
                       regAdapterType === 'python'
-                        ? 'bg-sky-950/40 border-sky-500/80 shadow-md shadow-sky-500/10'
+                        ? 'bg-emerald-950/40 border-emerald-500/80 shadow-md shadow-emerald-500/10'
                         : 'bg-dark-bg/60 border-dark-border hover:border-slate-700'
                     }`}
                   >
                     <div className="flex items-center gap-2 text-white font-semibold">
-                      <Code className="w-4 h-4 text-sky-400" />
+                      <Code className="w-4 h-4 text-emerald-400" />
                       <span>Mode A — Python Adapter</span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-1">
@@ -1979,7 +1979,7 @@ export const AgentsPage: React.FC = () => {
               {/* Adapter Specific Configuration */}
               {regAdapterType === 'python' ? (
                 <div className="p-4 rounded-xl bg-dark-bg border border-dark-border space-y-3">
-                  <h4 className="font-semibold text-sky-400 flex items-center gap-1.5">
+                  <h4 className="font-semibold text-emerald-400 flex items-center gap-1.5">
                     <Code className="w-4 h-4" />
                     <span>Python Adapter Configuration</span>
                   </h4>
@@ -2132,7 +2132,7 @@ export const AgentsPage: React.FC = () => {
                   disabled={isValidating}
                   className="px-4 py-2 rounded-xl bg-dark-bg border border-dark-border hover:bg-slate-800 text-slate-200 font-semibold text-xs transition-all flex items-center gap-1.5"
                 >
-                  <Shield className="w-3.5 h-3.5 text-sky-400" />
+                  <Shield className="w-3.5 h-3.5 text-emerald-400" />
                   <span>{isValidating ? 'Validating...' : 'Validate Config'}</span>
                 </button>
 

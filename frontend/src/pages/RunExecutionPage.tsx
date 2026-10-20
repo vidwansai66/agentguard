@@ -166,7 +166,7 @@ export const RunExecutionPage: React.FC = () => {
         {/* Left Column: Run Configuration Launcher */}
         <div className="p-6 rounded-2xl bg-dark-card border border-dark-border space-y-5 shadow-sm">
           <div className="flex items-center gap-2 border-b border-dark-border pb-3">
-            <Sliders className="w-4 h-4 text-sky-400" />
+            <Sliders className="w-4 h-4 text-emerald-400" />
             <h2 className="text-sm font-bold text-white uppercase tracking-wider font-mono">Run Parameters</h2>
           </div>
 
@@ -174,7 +174,7 @@ export const RunExecutionPage: React.FC = () => {
             {/* Agent Selector */}
             <div>
               <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
-                <Bot className="w-3.5 h-3.5 text-sky-400" />
+                <Bot className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Target Agent</span>
               </label>
               <select
@@ -202,7 +202,7 @@ export const RunExecutionPage: React.FC = () => {
                       {selectedAgent.adapter_type === 'http' ? (
                         <Server className="w-3 h-3 text-amber-400" />
                       ) : (
-                        <Code className="w-3 h-3 text-sky-400" />
+                        <Code className="w-3 h-3 text-emerald-400" />
                       )}
                       <span className="capitalize">{selectedAgent.adapter_type || 'python'} Adapter</span>
                     </span>
@@ -214,7 +214,7 @@ export const RunExecutionPage: React.FC = () => {
                     <span className="text-slate-400">Observability:</span>
                     <span className={`px-1.5 py-0.5 rounded font-semibold uppercase ${
                       selectedAgent.observability_level === 'level_1_result_only'
-                        ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                        ? 'bg-teal-500/10 text-teal-400 border border-teal-500/30'
                         : selectedAgent.observability_level === 'level_2_structured_events'
                         ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
                         : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
@@ -231,7 +231,7 @@ export const RunExecutionPage: React.FC = () => {
                     {(selectedAgent.declared_capabilities || ['ticket_create', 'ticket_query', 'ticket_get']).map((c) => (
                       <span
                         key={c}
-                        className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-sky-950/60 text-sky-300 border border-sky-800/60"
+                        className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-950/60 text-emerald-300 border border-emerald-800/60"
                       >
                         {c}
                       </span>
@@ -244,7 +244,7 @@ export const RunExecutionPage: React.FC = () => {
             {/* Version Selector */}
             <div>
               <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
-                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                <Layers className="w-3.5 h-3.5 text-teal-400" />
                 <span>Agent Version / Strategy</span>
               </label>
               <select
@@ -411,10 +411,10 @@ export const RunExecutionPage: React.FC = () => {
               <button
                 onClick={handleExecute}
                 disabled={isExecuting || isBlocked}
-                className={`w-full py-2.5 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg ${
+                className={`w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-lg ${
                   isBlocked
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
-                    : 'bg-brand-600 hover:bg-brand-500 shadow-brand-600/25'
+                    : 'btn-tactile-brand text-white shadow-emerald-600/25'
                 }`}
               >
                 {isExecuting ? (
@@ -443,8 +443,8 @@ export const RunExecutionPage: React.FC = () => {
           {isExecuting && (
             <div className="p-8 rounded-2xl bg-dark-card border border-dark-border flex flex-col items-center justify-center text-center space-y-4">
               <div className="relative">
-                <div className="w-16 h-16 rounded-full border-4 border-sky-500/20 border-t-sky-400 animate-spin" />
-                <Terminal className="w-6 h-6 text-sky-400 absolute inset-0 m-auto" />
+                <div className="w-16 h-16 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+                <Terminal className="w-6 h-6 text-emerald-400 absolute inset-0 m-auto" />
               </div>
               <div>
                 <h3 className="text-sm font-semibold text-white">Running Deterministic Test Engine</h3>
@@ -482,7 +482,7 @@ export const RunExecutionPage: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-dark-border pb-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-mono text-xs text-sky-400 font-bold">{currentRun.id}</span>
+                      <span className="font-mono text-xs text-emerald-400 font-bold">{currentRun.id}</span>
                       <StatusBadge status={currentRun.status} />
                       <span className="text-[11px] font-mono text-slate-400">
                         {currentRun.total_duration_ms.toFixed(1)}ms total

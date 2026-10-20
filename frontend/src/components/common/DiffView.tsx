@@ -16,14 +16,13 @@ export const DiffView: React.FC<Props> = ({ diff }) => {
       <div className="p-3 overflow-x-auto max-h-80 leading-5">
         {lines.map((line, idx) => {
           let lineClass = 'text-slate-300';
-          let prefix = '';
 
           if (line.startsWith('+') && !line.startsWith('+++')) {
             lineClass = 'bg-emerald-950/40 text-emerald-300 font-medium';
           } else if (line.startsWith('-') && !line.startsWith('---')) {
             lineClass = 'bg-rose-950/40 text-rose-300 font-medium';
           } else if (line.startsWith('@@')) {
-            lineClass = 'text-cyan-400 font-semibold bg-cyan-950/20';
+            lineClass = 'text-emerald-400 font-semibold bg-emerald-950/30';
           } else if (line.startsWith('---') || line.startsWith('+++')) {
             lineClass = 'text-slate-500 font-bold';
           }

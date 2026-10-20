@@ -1,25 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Settings,
+  Activity,
+  CheckCircle2,
   Database,
+  ExternalLink,
   Shield,
   BookOpen,
   FileCode,
   RotateCcw,
-  CheckCircle2,
-  ExternalLink,
-  Terminal,
-  Activity,
-  AlertTriangle
+  Sun,
+  Moon
 } from 'lucide-react';
 import { api } from '../api/client';
 import { SystemStatus } from '../types';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
+import { useTheme } from '../context/ThemeContext';
+import { ThemeToggle } from '../components/common/ThemeToggle';
 
 export const SettingsPage: React.FC = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   const loadStatus = async () => {
     try {
@@ -27,7 +30,7 @@ export const SettingsPage: React.FC = () => {
       const data = await api.getSystemStatus();
       setStatus(data);
     } catch (err) {
-      console.error('Failed to load system status', err);
+      console.error('Failed to load system diagnostics', err);
     } finally {
       setLoading(false);
     }
@@ -38,14 +41,19 @@ export const SettingsPage: React.FC = () => {
   }, []);
 
   const handleResetData = async () => {
-    if (!window.confirm('Reset all run history and re-seed the 11 baseline demo scenarios?')) return;
+    if (!window.confirm('Resetting demo data will restore default scenarios and agents. Continue?')) {
+      return;
+    }
+
     try {
       setResetting(true);
       const res = await api.resetDemoData();
-      alert(res.message);
-      loadStatus();
-    } catch (err: any) {
-      alert(`Reset failed: ${err.message}`);
+      setResetSuccess(true);
+      await loadStatus();
+      setTimeout(() => setResetSuccess(false), 4000);
+    } catch (err) {
+      console.error('Data reset failed', err);
+      alert('Reset failed: ' + (err as any).message);
     } finally {
       setResetting(false);
     }
@@ -60,15 +68,72 @@ export const SettingsPage: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white">Settings & Architecture Documentation</h1>
         <p className="text-xs text-slate-400 mt-1">
-          System health, environment parameters, metric mathematical definitions, and scenario JSON specifications.
+          System health, theme appearance, metric mathematical definitions, and scenario JSON specifications.
         </p>
+      </div>
+
+      {/* Interface Appearance Theme Selector */}
+      <div className="p-6 rounded-2xl bg-dark-card border border-dark-border space-y-4 shadow-sm transition-colors">
+        <div className="flex items-center justify-between border-b border-dark-border pb-3">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-400" />
+            <h2 className="text-sm font-bold text-white uppercase font-mono tracking-wider">Interface Appearance & Theme</h2>
+          </div>
+          <ThemeToggle size="md" id="settings-theme-toggle" />
+        </div>
+
+        <p className="text-xs text-slate-400">
+          Select your preferred interface display mode. Security emerald accents remain active across both modes.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+          <div
+            onClick={() => setTheme('dark')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+              theme === 'dark'
+                ? 'bg-dark-bg/80 border-emerald-500 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/50'
+                : 'bg-dark-bg/40 border-dark-border hover:border-slate-600'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-[#0A0E17] border border-dark-border flex items-center justify-center text-amber-400 shadow-sm">
+                <Moon className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-white">Cybersecurity Dark Mode</h4>
+                <p className="text-xs text-slate-400">Deep obsidian background with glowing neon accents</p>
+              </div>
+            </div>
+            {theme === 'dark' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+          </div>
+
+          <div
+            onClick={() => setTheme('light')}
+            className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+              theme === 'light'
+                ? 'bg-emerald-50/20 border-emerald-500 shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/50'
+                : 'bg-dark-bg/40 border-dark-border hover:border-slate-600'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-center text-amber-500 shadow-sm">
+                <Sun className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-white">Clean Security Light Mode</h4>
+                <p className="text-xs text-slate-400">High-contrast slate background with crisp surfaces</p>
+              </div>
+            </div>
+            {theme === 'light' && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* System Diagnostics Card */}
         <div className="p-6 rounded-2xl bg-dark-card border border-dark-border space-y-4">
           <div className="flex items-center gap-2 border-b border-dark-border pb-3">
-            <Activity className="w-4 h-4 text-sky-400" />
+            <Activity className="w-4 h-4 text-emerald-400" />
             <h2 className="text-sm font-bold text-white uppercase font-mono tracking-wider">System Status</h2>
           </div>
 
@@ -79,7 +144,7 @@ export const SettingsPage: React.FC = () => {
             </div>
             <div className="flex justify-between py-1.5 border-b border-dark-border/60">
               <span className="text-slate-400">Database Engine</span>
-              <span className="text-cyan-400 font-bold capitalize">{status?.database_url_type || 'sqlite'} (Local Store)</span>
+              <span className="text-teal-400 font-bold capitalize">{status?.database_url_type || 'sqlite'} (Local Store)</span>
             </div>
             <div className="flex justify-between py-1.5 border-b border-dark-border/60">
               <span className="text-slate-400">Database Connection</span>
@@ -103,13 +168,13 @@ export const SettingsPage: React.FC = () => {
 
           <div className="pt-2 flex items-center gap-3">
             <a
-              href="http://127.0.0.1:8000/docs"
+              href="https://agentguard-p14p.onrender.com/docs"
               target="_blank"
               rel="noreferrer"
               className="px-3 py-1.5 rounded-lg bg-dark-bg hover:bg-dark-hover border border-dark-border text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all"
             >
               <span>Interactive OpenAPI Docs</span>
-              <ExternalLink className="w-3 h-3 text-sky-400" />
+              <ExternalLink className="w-3 h-3 text-emerald-400" />
             </a>
 
             <button
@@ -156,7 +221,7 @@ export const SettingsPage: React.FC = () => {
       {/* Metric Definitions Card */}
       <div className="p-6 rounded-2xl bg-dark-card border border-dark-border space-y-4">
         <div className="flex items-center gap-2 border-b border-dark-border pb-3">
-          <BookOpen className="w-4 h-4 text-cyan-400" />
+          <BookOpen className="w-4 h-4 text-teal-400" />
           <h2 className="text-sm font-bold text-white uppercase font-mono tracking-wider">Evaluation Metrics Formulation</h2>
         </div>
 
@@ -169,7 +234,7 @@ export const SettingsPage: React.FC = () => {
           </div>
 
           <div className="p-3.5 rounded-xl bg-dark-bg border border-dark-border space-y-1">
-            <span className="font-semibold text-cyan-400 font-mono">Recovery Rate</span>
+            <span className="font-semibold text-teal-400 font-mono">Recovery Rate</span>
             <p className="text-slate-400 text-[11px] leading-relaxed">
               Proportion of initially disrupted scenario runs that safely achieve goal reconciliation under state-aware policies without side effects.
             </p>
@@ -192,7 +257,7 @@ export const SettingsPage: React.FC = () => {
           <div className="p-3.5 rounded-xl bg-dark-bg border border-dark-border space-y-1">
             <span className="font-semibold text-white font-mono">Monotonic Latency</span>
             <p className="text-slate-400 text-[11px] leading-relaxed">
-              Elapsed time per scenario step measured via high-resolution monotonic timer (<code className="text-sky-300">time.perf_counter()</code>).
+              Elapsed time per scenario step measured via high-resolution monotonic timer (<code className="text-emerald-300">time.perf_counter()</code>).
             </p>
           </div>
 
@@ -208,7 +273,7 @@ export const SettingsPage: React.FC = () => {
       {/* Scenario JSON Format Schema & Example */}
       <div className="p-6 rounded-2xl bg-dark-card border border-dark-border space-y-4">
         <div className="flex items-center gap-2 border-b border-dark-border pb-3">
-          <FileCode className="w-4 h-4 text-sky-400" />
+          <FileCode className="w-4 h-4 text-emerald-400" />
           <h2 className="text-sm font-bold text-white uppercase font-mono tracking-wider">Scenario JSON Specification</h2>
         </div>
 

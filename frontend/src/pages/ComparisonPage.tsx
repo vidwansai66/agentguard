@@ -233,7 +233,7 @@ export const ComparisonPage: React.FC = () => {
                   <span
                     className={`text-lg font-bold font-mono ${
                       comparison.candidate_recovery_rate > comparison.baseline_recovery_rate
-                        ? 'text-cyan-400'
+                        ? 'text-emerald-400'
                         : 'text-slate-300'
                     }`}
                   >
