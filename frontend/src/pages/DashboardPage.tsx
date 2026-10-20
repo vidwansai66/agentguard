@@ -75,6 +75,24 @@ export const DashboardPage: React.FC = () => {
 
   const hasRuns = (stats?.total_runs || 0) > 0;
 
+  const formatCategory = (cat: string) => {
+    const map: Record<string, string> = {
+      normal_execution: 'Normal Flow',
+      transient_timeout: 'Timeout',
+      ambiguous_outcome: 'Ambiguous',
+      repeated_action: 'Repeated Action',
+      schema_violation: 'Schema Error',
+      prompt_injection: 'Prompt Injection'
+    };
+    return map[cat] || cat.replace(/_/g, ' ');
+  };
+
+  const totalScenarios = stats?.total_scenarios_count ?? 0;
+  const hasEvaluatedScenarios = (stats?.total_scenarios_count ?? stats?.total_runs ?? 0) > 0;
+  const disruptedCount = stats?.disrupted_scenarios_count ?? 0;
+  const hasDisruptions = disruptedCount > 0;
+  const unsafeCount = stats?.unsafe_side_effects_count ?? 0;
+
   return (
     <div className="space-y-8">
       {/* Top Banner & Quick Actions */}
@@ -119,7 +137,9 @@ export const DashboardPage: React.FC = () => {
             <Activity className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-white font-mono">{stats?.total_runs || 0}</div>
-          <p className="text-[11px] text-slate-500 mt-1">Across all test suites</p>
+          <p className="text-[11px] text-slate-400 mt-1 truncate" title={totalScenarios > 0 ? `${totalScenarios} scenario executions across ${stats?.total_runs || 0} runs` : 'Across all test suites'}>
+            {totalScenarios > 0 ? `${totalScenarios} scenario runs` : 'Across all test suites'}
+          </p>
         </div>
 
         {/* Task Success Rate */}
@@ -129,9 +149,13 @@ export const DashboardPage: React.FC = () => {
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="text-2xl font-bold text-emerald-400 font-mono">
-            {((stats?.task_success_rate || 0) * 100).toFixed(1)}%
+            {hasEvaluatedScenarios ? `${((stats?.task_success_rate || 0) * 100).toFixed(1)}%` : 'N/A'}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Explicit pass criteria</p>
+          <p className="text-[11px] text-slate-400 mt-1 truncate" title={stats?.passed_scenarios_count !== undefined && totalScenarios > 0 ? `${stats.passed_scenarios_count} of ${totalScenarios} scenarios satisfied pass criteria` : 'Explicit pass criteria'}>
+            {stats?.passed_scenarios_count !== undefined && totalScenarios > 0
+              ? `${stats.passed_scenarios_count} of ${totalScenarios} passed`
+              : 'Explicit pass criteria'}
+          </p>
         </div>
 
         {/* Recovery Rate */}
@@ -141,34 +165,54 @@ export const DashboardPage: React.FC = () => {
             <RotateCcw className="w-4 h-4 text-teal-400" />
           </div>
           <div className="text-2xl font-bold text-teal-400 font-mono">
-            {((stats?.recovery_rate || 0) * 100).toFixed(1)}%
+            {hasDisruptions && stats?.recovery_rate !== null && stats?.recovery_rate !== undefined
+              ? `${((stats?.recovery_rate || 0) * 100).toFixed(1)}%`
+              : 'N/A'}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Under tool disruption</p>
+          <p className="text-[11px] text-slate-400 mt-1 truncate" title={hasDisruptions ? `${stats?.recovered_scenarios_count ?? 0} of ${disruptedCount} disruption attempts recovered` : 'No disrupted scenarios evaluated in sample'}>
+            {hasDisruptions
+              ? `${stats?.recovered_scenarios_count ?? 0} of ${disruptedCount} recovered`
+              : 'No disruptions tested'}
+          </p>
         </div>
 
         {/* Unsafe Side-Effect Rate */}
         <div className="p-4 rounded-xl bg-dark-card border border-dark-border shadow-sm">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
             <span>Unsafe Side Effects</span>
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <AlertTriangle className={`w-4 h-4 ${unsafeCount > 0 ? 'text-rose-400' : 'text-emerald-400'}`} />
           </div>
-          <div className="text-2xl font-bold text-rose-400 font-mono">
-            {((stats?.unsafe_side_effect_rate || 0) * 100).toFixed(1)}%
+          <div className={`text-2xl font-bold font-mono ${unsafeCount > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+            {hasEvaluatedScenarios ? `${((stats?.unsafe_side_effect_rate || 0) * 100).toFixed(1)}%` : 'N/A'}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Duplicate / policy breach</p>
+          <p className="text-[11px] text-slate-400 mt-1 truncate" title={hasEvaluatedScenarios ? `${unsafeCount} observed in ${totalScenarios} measured executions. Not an unmeasured theoretical guarantee.` : 'Duplicate or policy breach'}>
+            {hasEvaluatedScenarios
+              ? unsafeCount === 0
+                ? `0 observed (n=${totalScenarios})`
+                : `${unsafeCount} observed in ${totalScenarios}`
+              : 'Duplicate / policy breach'}
+          </p>
         </div>
 
-        {/* Median Latency */}
+        {/* Execution Latency */}
         <div className="p-4 rounded-xl bg-dark-card border border-dark-border shadow-sm">
           <div className="flex items-center justify-between text-slate-400 text-xs mb-2">
-            <span>Median Latency</span>
+            <span>Execution Latency</span>
             <Clock className="w-4 h-4 text-amber-400" />
           </div>
           <div className="text-2xl font-bold text-white font-mono">
-            {stats?.median_latency_ms || 0}
-            <span className="text-xs font-normal text-slate-400 ml-1">ms</span>
+            {hasEvaluatedScenarios ? (
+              <>
+                {stats?.median_latency_ms || 0}
+                <span className="text-xs font-normal text-slate-400 ml-1">ms</span>
+              </>
+            ) : (
+              'N/A'
+            )}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">p95: {stats?.p95_latency_ms || 0}ms</p>
+          <p className="text-[11px] text-slate-400 mt-1 truncate" title={`p95: ${stats?.p95_latency_ms || 0}ms across ${totalScenarios} scenario runs. In-process mock execution overhead; remote HTTP agents reflect external network latency.`}>
+            p95: {stats?.p95_latency_ms || 0}ms <span className="text-[10px] text-slate-500">(In-process)</span>
+          </p>
         </div>
 
         {/* Cost Per Task */}
@@ -177,11 +221,11 @@ export const DashboardPage: React.FC = () => {
             <span>Model Cost</span>
             <Coins className="w-4 h-4 text-indigo-400" />
           </div>
-          <div className="text-xs font-semibold text-slate-300 font-mono truncate" title={stats?.cost_per_successful_task}>
-            Local Mocks
+          <div className="text-2xl font-bold text-slate-200 font-mono">
+            $0.00
           </div>
-          <p className="text-[11px] text-slate-500 mt-1 truncate" title="External LLM cost input inactive">
-            Zero external cost
+          <p className="text-[11px] text-slate-400 mt-1 truncate" title="Local mock runner harness; 0 external LLM API tokens billed">
+            Local mock harness
           </p>
         </div>
       </div>
@@ -211,28 +255,59 @@ export const DashboardPage: React.FC = () => {
               </div>
 
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats?.trend_history || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="successGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                      </linearGradient>
-                      <linearGradient id="unsafeGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="timestamp" stroke="#64748b" fontSize={11} />
-                    <YAxis stroke="#64748b" fontSize={11} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#111827', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
-                      formatter={(val: any) => [`${(Number(val) * 100).toFixed(1)}%`]}
-                    />
-                    <Area type="monotone" dataKey="success_rate" name="Success Rate" stroke="#10b981" fill="url(#successGrad)" strokeWidth={2} />
-                    <Area type="monotone" dataKey="unsafe_side_effect_rate" name="Unsafe Side Effects" stroke="#f43f5e" fill="url(#unsafeGrad)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {(stats?.trend_history || []).length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                    No completed test runs in history yet.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={stats?.trend_history || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="successGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                        </linearGradient>
+                        <linearGradient id="unsafeGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#f43f5e" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="timestamp" stroke="#64748b" fontSize={11} />
+                      <YAxis stroke="#64748b" fontSize={11} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#111827', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                        formatter={(val: any, name: string) => [`${(Number(val) * 100).toFixed(1)}%`, name]}
+                        labelFormatter={(_label: any, payload: any) => {
+                          if (payload && payload[0]?.payload) {
+                            const pt = payload[0].payload;
+                            return `${pt.run_name || pt.run_id} (${pt.timestamp})`;
+                          }
+                          return _label;
+                        }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="success_rate"
+                        name="Success Rate"
+                        stroke="#10b981"
+                        fill="url(#successGrad)"
+                        strokeWidth={2}
+                        dot={{ r: 4, strokeWidth: 1, fill: '#10b981' }}
+                        activeDot={{ r: 6 }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="unsafe_side_effect_rate"
+                        name="Unsafe Side Effects"
+                        stroke="#f43f5e"
+                        fill="url(#unsafeGrad)"
+                        strokeWidth={2}
+                        dot={{ r: 4, strokeWidth: 1, fill: '#f43f5e' }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
 
@@ -243,28 +318,36 @@ export const DashboardPage: React.FC = () => {
                   <BarChart3 className="w-4 h-4 text-emerald-400" />
                   <span>Outcomes by Failure Category</span>
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">Distribution across the 6 fault injection categories</p>
+                <p className="text-xs text-slate-400 mt-0.5">Distribution across evaluated fault categories</p>
               </div>
 
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={stats?.failure_type_metrics || []} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
-                    <XAxis
-                      dataKey="category"
-                      stroke="#64748b"
-                      fontSize={10}
-                      interval={0}
-                      angle={-25}
-                      textAnchor="end"
-                    />
-                    <YAxis stroke="#64748b" fontSize={11} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#111827', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
-                    />
-                    <Bar dataKey="passed" name="Passed" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="failed" name="Failed" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {(stats?.failure_type_metrics || []).length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                    No evaluated categories in database yet.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={stats?.failure_type_metrics || []} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+                      <XAxis
+                        dataKey="category"
+                        stroke="#64748b"
+                        fontSize={10}
+                        interval={0}
+                        angle={-20}
+                        textAnchor="end"
+                        tickFormatter={formatCategory}
+                      />
+                      <YAxis stroke="#64748b" fontSize={11} allowDecimals={false} domain={[0, 'auto']} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: '#111827', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                        labelFormatter={(cat: string) => formatCategory(cat)}
+                      />
+                      <Bar dataKey="passed" name="Passed" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="failed" name="Failed" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
           </div>

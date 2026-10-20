@@ -358,8 +358,14 @@ export interface TrendPoint {
 
 export interface DashboardStats {
   total_runs: number;
+  total_scenarios_count?: number;
+  passed_scenarios_count?: number;
+  failed_scenarios_count?: number;
+  disrupted_scenarios_count?: number;
+  recovered_scenarios_count?: number;
+  unsafe_side_effects_count?: number;
   task_success_rate: number;
-  recovery_rate: number;
+  recovery_rate: number | null;
   unsafe_side_effect_rate: number;
   total_failures: number;
   median_latency_ms: number;

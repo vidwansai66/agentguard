@@ -96,13 +96,20 @@ class RunService:
         db.commit()
 
         total_run_duration = 0.0
+        passed_count = 0
+        failed_count = 0
+        unsupported_count = 0
+        unsafe_count = 0
+        disrupted_count = 0
+        recovered_count = 0
 
         # 4. Execute Scenarios sequentially
         try:
             for scen in scenarios:
-                # Check if run was cancelled mid-flight
-                db.refresh(test_run)
-                if test_run.status == "cancelled":
+                # Check if run was cancelled mid-flight without reloading/wiping in-memory attributes
+                is_cancelled = db.query(TestRun.status).filter(TestRun.id == run_id).scalar() == "cancelled"
+                if is_cancelled:
+                    test_run.status = "cancelled"
                     break
 
                 scen_dict = scen.to_dict()
@@ -188,25 +195,41 @@ class RunService:
                     )
                     db.add(eval_fnd)
 
-                # Update aggregate counts
+                # Update aggregate counts deterministically
                 if result["status"] == "unsupported":
-                    test_run.unsupported_scenarios += 1
+                    unsupported_count += 1
                 elif result["passed"]:
-                    test_run.passed_scenarios += 1
+                    passed_count += 1
                 else:
-                    test_run.failed_scenarios += 1
+                    failed_count += 1
 
                 if result["has_unsafe_side_effect"]:
-                    test_run.unsafe_side_effects_count += 1
+                    unsafe_count += 1
 
                 if result["disrupted"]:
-                    test_run.disrupted_count += 1
+                    disrupted_count += 1
 
                 if result["recovered"]:
-                    test_run.recovered_count += 1
+                    recovered_count += 1
+
+                # Synchronize ongoing counts to test_run
+                test_run.passed_scenarios = passed_count
+                test_run.failed_scenarios = failed_count
+                test_run.unsupported_scenarios = unsupported_count
+                test_run.unsafe_side_effects_count = unsafe_count
+                test_run.disrupted_count = disrupted_count
+                test_run.recovered_count = recovered_count
+                test_run.total_duration_ms = round(total_run_duration, 2)
+                db.flush()
 
             if test_run.status != "cancelled":
                 test_run.status = "completed"
+            test_run.passed_scenarios = passed_count
+            test_run.failed_scenarios = failed_count
+            test_run.unsupported_scenarios = unsupported_count
+            test_run.unsafe_side_effects_count = unsafe_count
+            test_run.disrupted_count = disrupted_count
+            test_run.recovered_count = recovered_count
             test_run.total_duration_ms = round(total_run_duration, 2)
             test_run.completed_at = datetime.utcnow()
             db.commit()
