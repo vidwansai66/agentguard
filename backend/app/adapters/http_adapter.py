@@ -65,7 +65,9 @@ class HttpAgentAdapter(AgentAdapter):
         self.initialize(self.config)
 
     def initialize(self, config: Dict[str, Any]) -> None:
-        self.config = config or {}
+        self.config = dict(config or {})
+        if "_client" in self.config:
+            self._client = self.config.pop("_client")
         self.base_url = (self.config.get("base_url") or "").strip().rstrip("/")
         self.health_endpoint = self.config.get("health_endpoint", "/health")
         if self.health_endpoint and not self.health_endpoint.startswith("/"):
