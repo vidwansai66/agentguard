@@ -1,5 +1,6 @@
 import json
 import pytest
+import httpx
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app.main import app
@@ -275,3 +276,230 @@ def test_secret_redaction_in_http_adapter_trace():
             # In trace decision, the secret must be redacted
             recorded_reasoning = mock_invoker.record_decision.call_args[1]["reasoning"]
             assert "super-secret-production-token-12345" not in recorded_reasoning
+
+def test_http_adapter_regression_valid_json_response():
+    """Regression test: verifies valid JSON response records http_response event with status code and mapped output."""
+    config = {
+        "base_url": "http://127.0.0.1:9099",
+        "invocation_endpoint": "/webhook/test",
+        "allow_local_dev": True,
+        "response_mapping": {
+            "result_path": "output",
+            "status_path": "status"
+        }
+    }
+    adapter = HttpAgentAdapter(agent_id="test-valid-json", config=config)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"content-type": "application/json"}
+    mock_resp.json.return_value = {
+        "output": "Controlled HTTP 404 test completed",
+        "status": "success"
+    }
+
+    mock_invoker = MagicMock()
+    mock_invoker.current_step = 1
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        res = adapter.run_task(
+            task_input={"prompt": "Run test"},
+            context={"run_id": "RUN-VALID-1"},
+            tool_invoker=mock_invoker
+        )
+
+        assert res["status"] == "success"
+        assert res["status_code"] == 200
+        assert res["message"] == "Controlled HTTP 404 test completed"
+
+        assert mock_invoker.record_http_response.called
+        call_kwargs = mock_invoker.record_http_response.call_args[1]
+        assert call_kwargs["action"] == "http_response"
+        assert call_kwargs["status_code"] == 200
+        assert call_kwargs["output_data"]["mapped_status"] == "success"
+        assert call_kwargs["output_data"]["result_summary"] == "Controlled HTTP 404 test completed"
+
+def test_http_adapter_regression_non_2xx_response():
+    """Regression test: verifies non-2xx status code records error event and honestly reports failed task."""
+    config = {
+        "base_url": "http://127.0.0.1:9099",
+        "invocation_endpoint": "/webhook/test",
+        "allow_local_dev": True
+    }
+    adapter = HttpAgentAdapter(agent_id="test-non-2xx", config=config)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 404
+    mock_resp.text = "Not Found: Webhook path does not exist"
+
+    mock_invoker = MagicMock()
+    mock_invoker.current_step = 1
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        res = adapter.run_task(
+            task_input={"prompt": "Run test"},
+            context={"run_id": "RUN-404-1"},
+            tool_invoker=mock_invoker
+        )
+
+        assert res["status"] == "failed"
+        assert res["status_code"] == 404
+        assert res["disrupted"] is True
+        assert "404" in res["error"]
+
+        assert mock_invoker.record_http_error.called
+        call_kwargs = mock_invoker.record_http_error.call_args[1]
+        assert call_kwargs["action"] == "http_response_error"
+        assert call_kwargs["output_data"]["status_code"] == 404
+        assert "Not Found" in call_kwargs["output_data"]["response_preview"]
+
+def test_http_adapter_regression_malformed_json_response():
+    """Regression test: verifies malformed JSON payload records error event and fails task."""
+    config = {
+        "base_url": "http://127.0.0.1:9099",
+        "invocation_endpoint": "/webhook/test",
+        "allow_local_dev": True
+    }
+    adapter = HttpAgentAdapter(agent_id="test-malformed-json", config=config)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.text = "<!doctype html><html><body>Error</body></html>"
+    mock_resp.json.side_effect = ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    mock_invoker = MagicMock()
+    mock_invoker.current_step = 1
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        res = adapter.run_task(
+            task_input={"prompt": "Run test"},
+            context={"run_id": "RUN-MALFORMED-1"},
+            tool_invoker=mock_invoker
+        )
+
+        assert res["status"] == "failed"
+        assert res["disrupted"] is True
+        assert "invalid json" in res["error"].lower()
+
+        assert mock_invoker.record_http_error.called
+        call_kwargs = mock_invoker.record_http_error.call_args[1]
+        assert call_kwargs["action"] == "http_malformed_json"
+        assert call_kwargs["output_data"]["status_code"] == 200
+        assert "<!doctype html>" in call_kwargs["output_data"]["response_preview"]
+
+def test_http_adapter_regression_timeout():
+    """Regression test: verifies timeout records http_timeout error event and marks run disrupted/failed."""
+    config = {
+        "base_url": "http://127.0.0.1:9099",
+        "invocation_endpoint": "/webhook/test",
+        "allow_local_dev": True,
+        "read_timeout_seconds": 2.0
+    }
+    adapter = HttpAgentAdapter(agent_id="test-timeout", config=config)
+
+    mock_invoker = MagicMock()
+    mock_invoker.current_step = 1
+
+    with patch("httpx.Client.post", side_effect=httpx.ReadTimeout("The read operation timed out")):
+        res = adapter.run_task(
+            task_input={"prompt": "Run test"},
+            context={"run_id": "RUN-TIMEOUT-1"},
+            tool_invoker=mock_invoker
+        )
+
+        assert res["status"] == "failed"
+        assert res["disrupted"] is True
+        assert "timeout" in res["error"].lower()
+
+        assert mock_invoker.record_http_error.called
+        call_kwargs = mock_invoker.record_http_error.call_args[1]
+        assert call_kwargs["action"] == "http_timeout"
+        assert call_kwargs["output_data"]["timeout_seconds"] == 2.0
+
+def test_http_adapter_regression_response_mapping_failure():
+    """Regression test: verifies configured response_mapping failure records error event and fails task."""
+    config = {
+        "base_url": "http://127.0.0.1:9099",
+        "invocation_endpoint": "/webhook/test",
+        "allow_local_dev": True,
+        "response_mapping": {
+            "status_path": "nonexistent_field.deep_status",
+            "result_path": "nonexistent_result"
+        }
+    }
+    adapter = HttpAgentAdapter(agent_id="test-mapping-fail", config=config)
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"content-type": "application/json"}
+    mock_resp.json.return_value = {
+        "unrelated_key": 12345
+    }
+
+    mock_invoker = MagicMock()
+    mock_invoker.current_step = 1
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        res = adapter.run_task(
+            task_input={"prompt": "Run test"},
+            context={"run_id": "RUN-MAPFAIL-1"},
+            tool_invoker=mock_invoker
+        )
+
+        assert res["status"] == "failed"
+        assert res["disrupted"] is True
+        assert "mapping failed" in res["message"].lower() or "could not be resolved" in res["error"].lower()
+
+        assert mock_invoker.record_http_error.called
+        call_kwargs = mock_invoker.record_http_error.call_args[1]
+        assert call_kwargs["action"] == "http_mapping_error"
+        assert "nonexistent_field.deep_status" in call_kwargs["output_data"]["missing_path"]
+
+def test_http_adapter_e2e_scenario_runner_trace_events():
+    """Integration test: runs scenario with HTTP adapter through scenario_runner and asserts trace events."""
+    from app.runner.executor import scenario_runner
+    scenario = {
+        "id": "SCEN-HTTP-E2E",
+        "name": "HTTP Agent E2E Execution",
+        "failure_type": "normal_execution",
+        "task_input": {"prompt": "Controlled HTTP 404 test"},
+        "expected_outcome": {"status": "success", "ticket_created": False},
+        "allowed_tools": ["ticket_create", "ticket_query", "ticket_get"],
+        "declared_capabilities": ["ticket_create", "ticket_query", "ticket_get"],
+        "required_capabilities": []
+    }
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {"content-type": "application/json"}
+    mock_resp.json.return_value = {
+        "output": "Controlled HTTP 404 test completed",
+        "status": "success"
+    }
+    adapter_config = {
+        "base_url": "https://example.com",
+        "invocation_endpoint": "/webhook/agentguard-http-test",
+        "observability_level": "level_1_result_only",
+        "allow_local_dev": True,
+        "declared_capabilities": ["ticket_create", "ticket_query", "ticket_get"],
+        "response_mapping": {
+            "result_path": "output",
+            "status_path": "status"
+        }
+    }
+    with patch("httpx.Client.post", return_value=mock_resp):
+        res = scenario_runner.run_scenario(
+            scenario_data=scenario,
+            agent_id="test-http-agent",
+            agent_version="1.0.0",
+            adapter_type="http",
+            agent_adapter_config=adapter_config
+        )
+        assert res["execution_output"]["status"] == "success"
+        trace_actions = [e["action_name"] for e in res["trace_events"]]
+        assert "http_dispatch_start" in trace_actions
+        assert "http_response" in trace_actions
+        http_resp_evt = next(e for e in res["trace_events"] if e["action_name"] == "http_response")
+        assert http_resp_evt["event_type"] == "http_response"
+        assert http_resp_evt["sanitized_output"]["status_code"] == 200
+        assert "Controlled HTTP 404 test completed" in http_resp_evt["sanitized_output"]["result_summary"]
+

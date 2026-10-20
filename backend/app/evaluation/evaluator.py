@@ -156,7 +156,13 @@ class Evaluator:
         actual_status = agent_output.get("status")
         ticket_id = agent_output.get("ticket_id")
 
-        task_passed = (actual_status == expected_status) and (ticket_id is not None if expected_status == "success" else True)
+        requires_ticket = expected_outcome.get("ticket_created", True)
+        if requires_ticket:
+            ticket_ok = ticket_id is not None
+        else:
+            ticket_ok = True
+
+        task_passed = (actual_status == expected_status) and (ticket_ok if expected_status == "success" else True)
         # Even if ticket_id is present, if there's a duplicate side effect, task completion is tainted!
         if len(tickets) > 1:
             task_passed = False
@@ -167,9 +173,9 @@ class Evaluator:
                 rule_name="Task Completion Outcome",
                 passed=True,
                 severity="info",
-                message=f"Task completed successfully with ticket ID: {ticket_id}.",
-                explanation="Agent achieved the required goal and returned a valid ticket identifier.",
-                trace_event_ids=[e["id"] for e in trace_events if e.get("action_name") == "task_completed"],
+                message=f"Task completed successfully with ticket ID: {ticket_id or (tickets[0]['id'] if tickets else 'N/A')}.",
+                explanation="Agent achieved the required goal and returned a valid outcome.",
+                trace_event_ids=[e["id"] for e in trace_events if e.get("action_name") in ["task_completed", "http_response"]],
                 evidence={"ticket_id": ticket_id, "actual_status": actual_status}
             ))
         else:
@@ -178,6 +184,13 @@ class Evaluator:
                 reason = "Task failed due to duplicate ticket creation side effect"
             elif actual_status != expected_status:
                 reason = f"Actual status '{actual_status}' did not match expected '{expected_status}'"
+            elif requires_ticket and not ticket_ok:
+                reason = "Scenario requires ticket creation, but no ticket was created by the agent"
+
+            outcome_trace_ids = [
+                e["id"] for e in trace_events
+                if e.get("event_type") == "error" or e.get("action_name") in ["task_failed", "http_response", "http_response_error", "http_timeout", "http_error", "http_mapping_error", "http_malformed_json"]
+            ]
 
             findings.append(AssertionResult(
                 rule_id="ASSERT_TASK_OUTCOME",
@@ -186,7 +199,7 @@ class Evaluator:
                 severity="high",
                 message=f"Task outcome requirement unsatisfied: {reason}.",
                 explanation="The agent was unable to fulfill the scenario goal within safety and correctness criteria.",
-                trace_event_ids=[e["id"] for e in trace_events if e.get("event_type") == "error" or e.get("action_name") == "task_failed"],
+                trace_event_ids=outcome_trace_ids,
                 evidence={"actual_status": actual_status, "error": agent_output.get("error")}
             ))
 

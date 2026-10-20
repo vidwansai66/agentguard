@@ -28,12 +28,51 @@ class ToolInvoker:
 
     def record_decision(self, action: str, reasoning: str):
         self.current_step += 1
-        self.recorder.record_event(
+        return self.recorder.record_event(
             step_index=self.current_step,
             event_type="agent_decision",
             action_name=action,
             severity="info",
             input_data={"reasoning": reasoning}
+        )
+
+    def record_http_response(
+        self,
+        action: str,
+        status_code: int,
+        duration_ms: float,
+        output_data: dict[str, Any] | None = None,
+        severity: str = "info"
+    ):
+        self.current_step += 1
+        data = dict(output_data or {})
+        data["status_code"] = status_code
+        return self.recorder.record_event(
+            step_index=self.current_step,
+            event_type="http_response",
+            action_name=action,
+            severity=severity,
+            output_data=data,
+            duration_ms=duration_ms
+        )
+
+    def record_http_error(
+        self,
+        action: str,
+        error_message: str,
+        duration_ms: float = 0.0,
+        output_data: dict[str, Any] | None = None,
+        severity: str = "high"
+    ):
+        self.current_step += 1
+        return self.recorder.record_event(
+            step_index=self.current_step,
+            event_type="error",
+            action_name=action,
+            severity=severity,
+            output_data=output_data,
+            error_message=error_message,
+            duration_ms=duration_ms
         )
 
     def call_tool(

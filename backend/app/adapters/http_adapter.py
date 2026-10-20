@@ -2,6 +2,7 @@ import os
 import re
 import ipaddress
 import urllib.parse
+import time
 from contextlib import nullcontext
 from typing import Any, Dict, List, Optional
 import httpx
@@ -284,6 +285,7 @@ class HttpAgentAdapter(AgentAdapter):
         headers["User-Agent"] = "AgentGuard-Adapter/1.0"
 
         run_url = f"{self.base_url}{self.invocation_endpoint}"
+        dispatch_start_time = time.perf_counter()
         tool_invoker.record_decision(
             action="http_dispatch_start",
             reasoning=f"Dispatching task to {run_url} [Observability: {self.observability_level}, connect_timeout={self.connect_timeout}s, read_timeout={self.read_timeout}s]"
@@ -297,17 +299,135 @@ class HttpAgentAdapter(AgentAdapter):
             )
             with client_ctx if hasattr(client_ctx, "__enter__") else nullcontext(client_ctx) as client:
                 resp = client.post(run_url, json=payload, headers=headers)
+                duration_ms = round((time.perf_counter() - dispatch_start_time) * 1000, 2)
 
-                if resp.status_code != 200:
-                    raise RuntimeError(f"HTTP Agent service returned status code {resp.status_code}: {resp.text[:200]}")
+                # 1. Non-2xx HTTP status handling
+                if resp.status_code < 200 or resp.status_code >= 300:
+                    raw_snippet = sanitize_text(resp.text[:300]) if resp.text else ""
+                    if self.secret_env_var:
+                        sec = os.environ.get(self.secret_env_var, "")
+                        if sec:
+                            raw_snippet = raw_snippet.replace(sec, "[REDACTED_SECRET]")
 
+                    err_msg = f"HTTP Agent service returned status code {resp.status_code}: {raw_snippet}"
+                    if hasattr(tool_invoker, "record_http_error"):
+                        tool_invoker.record_http_error(
+                            action="http_response_error",
+                            error_message=err_msg,
+                            duration_ms=duration_ms,
+                            output_data={
+                                "status_code": resp.status_code,
+                                "url": run_url,
+                                "response_preview": raw_snippet
+                            },
+                            severity="high"
+                        )
+                    elif hasattr(tool_invoker, "recorder") and hasattr(tool_invoker.recorder, "record_event"):
+                        tool_invoker.current_step = getattr(tool_invoker, "current_step", 0) + 1
+                        tool_invoker.recorder.record_event(
+                            step_index=tool_invoker.current_step,
+                            event_type="error",
+                            action_name="http_response_error",
+                            severity="high",
+                            output_data={"status_code": resp.status_code, "url": run_url, "response_preview": raw_snippet},
+                            duration_ms=duration_ms,
+                            error_message=err_msg
+                        )
+
+                    tool_invoker.record_decision(
+                        action="http_error",
+                        reasoning=f"HTTP service returned non-2xx status code {resp.status_code}"
+                    )
+                    return {
+                        "status": "failed",
+                        "status_code": resp.status_code,
+                        "disrupted": True,
+                        "recovered": False,
+                        "error": err_msg,
+                        "message": f"External HTTP agent returned status {resp.status_code}",
+                        "observability_level": self.observability_level
+                    }
+
+                # 2. Parse JSON response
                 try:
                     result_data = resp.json()
                 except Exception as json_err:
-                    raise ValueError(f"HTTP Agent returned invalid JSON: {str(json_err)}")
+                    raw_snippet = sanitize_text(resp.text[:300]) if resp.text else ""
+                    err_msg = f"HTTP Agent returned invalid JSON: {str(json_err)}"
+                    if hasattr(tool_invoker, "record_http_error"):
+                        tool_invoker.record_http_error(
+                            action="http_malformed_json",
+                            error_message=err_msg,
+                            duration_ms=duration_ms,
+                            output_data={
+                                "status_code": resp.status_code,
+                                "url": run_url,
+                                "response_preview": raw_snippet
+                            },
+                            severity="high"
+                        )
+                    elif hasattr(tool_invoker, "recorder") and hasattr(tool_invoker.recorder, "record_event"):
+                        tool_invoker.current_step = getattr(tool_invoker, "current_step", 0) + 1
+                        tool_invoker.recorder.record_event(
+                            step_index=tool_invoker.current_step,
+                            event_type="error",
+                            action_name="http_malformed_json",
+                            severity="high",
+                            output_data={"status_code": resp.status_code, "url": run_url, "response_preview": raw_snippet},
+                            duration_ms=duration_ms,
+                            error_message=err_msg
+                        )
 
+                    tool_invoker.record_decision(
+                        action="http_error",
+                        reasoning=f"HTTP response JSON parse error: {str(json_err)}"
+                    )
+                    return {
+                        "status": "failed",
+                        "status_code": resp.status_code,
+                        "disrupted": True,
+                        "recovered": False,
+                        "error": err_msg,
+                        "message": "HTTP service responded with non-JSON payload",
+                        "observability_level": self.observability_level
+                    }
+
+                # 3. Validate JSON object structure
                 if not isinstance(result_data, dict):
-                    raise ValueError("HTTP Agent response must be a JSON object.")
+                    err_msg = f"HTTP Agent response must be a JSON object, not {type(result_data).__name__}."
+                    if hasattr(tool_invoker, "record_http_error"):
+                        tool_invoker.record_http_error(
+                            action="http_schema_error",
+                            error_message=err_msg,
+                            duration_ms=duration_ms,
+                            output_data={"status_code": resp.status_code, "response_type": type(result_data).__name__},
+                            severity="high"
+                        )
+                    elif hasattr(tool_invoker, "recorder") and hasattr(tool_invoker.recorder, "record_event"):
+                        tool_invoker.current_step = getattr(tool_invoker, "current_step", 0) + 1
+                        tool_invoker.recorder.record_event(
+                            step_index=tool_invoker.current_step,
+                            event_type="error",
+                            action_name="http_schema_error",
+                            severity="high",
+                            output_data={"status_code": resp.status_code, "response_type": type(result_data).__name__},
+                            duration_ms=duration_ms,
+                            error_message=err_msg
+                        )
+
+                    tool_invoker.record_decision(
+                        action="http_error",
+                        reasoning=err_msg
+                    )
+                    return {
+                        "status": "failed",
+                        "status_code": resp.status_code,
+                        "disrupted": True,
+                        "recovered": False,
+                        "error": err_msg,
+                        "message": err_msg,
+                        "observability_level": self.observability_level
+                    }
 
                 # LEVEL 3: If external agent requested a tool call through AgentGuard:
                 if "tool_call_request" in result_data:
@@ -344,40 +464,173 @@ class HttpAgentAdapter(AgentAdapter):
                                     output_data=ev.get("output", {}),
                                     duration_ms=float(ev.get("duration_ms", 1.0))
                                 )
+                        tool_invoker.current_step += len(ext_events)
 
-                # Extract response fields using response_mapping if configured
+                # 4. Extract response fields using response_mapping if configured
+                mapping_failed = False
+                mapping_error_msg = None
+                result_val = None
+                status_val = None
+                error_val = None
+                ticket_id_val = None
+
                 if self.response_mapping:
-                    result_val = _extract_json_path(result_data, self.response_mapping.get("result_path")) or result_data.get("output") or result_data.get("result") or result_data.get("message")
-                    status_val = _extract_json_path(result_data, self.response_mapping.get("status_path")) or result_data.get("status", "success")
-                    error_val = _extract_json_path(result_data, self.response_mapping.get("error_path")) or result_data.get("error")
-                    ticket_id_val = _extract_json_path(result_data, self.response_mapping.get("ticket_id_path")) or result_data.get("ticket_id")
+                    result_path = self.response_mapping.get("result_path")
+                    status_path = self.response_mapping.get("status_path")
+                    error_path = self.response_mapping.get("error_path")
+                    ticket_id_path = self.response_mapping.get("ticket_id_path")
 
+                    if result_path:
+                        result_val = _extract_json_path(result_data, result_path)
+                    if status_path:
+                        status_val = _extract_json_path(result_data, status_path)
+                    if error_path:
+                        error_val = _extract_json_path(result_data, error_path)
+                    if ticket_id_path:
+                        ticket_id_val = _extract_json_path(result_data, ticket_id_path)
+
+                    # Fallbacks if paths weren't strictly resolved
+                    if result_val is None:
+                        result_val = result_data.get("output") or result_data.get("result") or result_data.get("message")
+                    if status_val is None and not status_path:
+                        status_val = result_data.get("status", "success")
+                    if error_val is None and not error_path:
+                        error_val = result_data.get("error")
+                    if ticket_id_val is None and not ticket_id_path:
+                        ticket_id_val = result_data.get("ticket_id")
+
+                    # Check for mapping failure
+                    if status_path and status_val is None:
+                        mapping_failed = True
+                        mapping_error_msg = f"Configured status_path '{status_path}' could not be resolved from HTTP response keys {list(result_data.keys())}"
+                    elif result_path and result_val is None and not any(k in result_data for k in ["output", "result", "message"]):
+                        mapping_failed = True
+                        mapping_error_msg = f"Configured result_path '{result_path}' could not be resolved from HTTP response keys {list(result_data.keys())}"
+                else:
+                    status_val = result_data.get("status", "success")
+                    result_val = result_data.get("message") or result_data.get("output") or result_data.get("result") or "Completed by HTTP agent"
+                    error_val = result_data.get("error")
+                    ticket_id_val = result_data.get("ticket_id")
+
+                # Handle response-mapping failure
+                if mapping_failed:
+                    missing_field = status_path if (status_path and status_val is None) else result_path
+                    if hasattr(tool_invoker, "record_http_error"):
+                        tool_invoker.record_http_error(
+                            action="http_mapping_error",
+                            error_message=mapping_error_msg or "Response mapping error",
+                            duration_ms=duration_ms,
+                            output_data={
+                                "status_code": resp.status_code,
+                                "response_keys": list(result_data.keys()),
+                                "missing_path": missing_field,
+                                "mapping_config": self.response_mapping
+                            },
+                            severity="high"
+                        )
+                    elif hasattr(tool_invoker, "recorder") and hasattr(tool_invoker.recorder, "record_event"):
+                        tool_invoker.current_step = getattr(tool_invoker, "current_step", 0) + 1
+                        tool_invoker.recorder.record_event(
+                            step_index=tool_invoker.current_step,
+                            event_type="error",
+                            action_name="http_mapping_error",
+                            severity="high",
+                            output_data={
+                                "status_code": resp.status_code,
+                                "response_keys": list(result_data.keys()),
+                                "missing_path": missing_field,
+                                "mapping_config": self.response_mapping
+                            },
+                            duration_ms=duration_ms,
+                            error_message=mapping_error_msg
+                        )
+
+                    tool_invoker.record_decision(
+                        action="http_error",
+                        reasoning=f"Response mapping failure: {mapping_error_msg}"
+                    )
                     return {
-                        "status": status_val if status_val in ["success", "completed"] else "failed",
-                        "ticket_id": ticket_id_val,
-                        "disrupted": result_data.get("disrupted", False),
-                        "recovered": result_data.get("recovered", False),
-                        "retries_used": result_data.get("retries_used", 0),
-                        "error": error_val,
-                        "message": str(result_val or "Completed by HTTP agent"),
+                        "status": "failed",
+                        "status_code": resp.status_code,
+                        "disrupted": True,
+                        "recovered": False,
+                        "error": mapping_error_msg,
+                        "message": f"Response mapping failed: {mapping_error_msg}",
                         "raw_output": result_data,
                         "observability_level": self.observability_level
                     }
 
-                # Standard response parsing
+                # Determine mapped task outcome
+                is_task_success = (str(status_val).lower() in ["success", "completed", "ok", "true"]) and not error_val
+                final_task_status = "success" if is_task_success else "failed"
+
+                # 5. Record sanitized HTTP response event into the trace
+                sanitized_summary = {
+                    "status_code": resp.status_code,
+                    "mapped_status": final_task_status,
+                    "raw_status": status_val,
+                    "result_summary": sanitize_text(str(result_val)[:300]) if result_val is not None else None,
+                    "ticket_id": ticket_id_val,
+                    "error": sanitize_text(str(error_val)) if error_val is not None else None,
+                    "response_keys": list(result_data.keys()),
+                    "content_type": resp.headers.get("content-type", "")
+                }
+
+                if hasattr(tool_invoker, "record_http_response"):
+                    tool_invoker.record_http_response(
+                        action="http_response",
+                        status_code=resp.status_code,
+                        duration_ms=duration_ms,
+                        output_data=sanitized_summary,
+                        severity="info" if is_task_success else "warning"
+                    )
+                elif hasattr(tool_invoker, "recorder") and hasattr(tool_invoker.recorder, "record_event"):
+                    tool_invoker.current_step = getattr(tool_invoker, "current_step", 0) + 1
+                    tool_invoker.recorder.record_event(
+                        step_index=tool_invoker.current_step,
+                        event_type="http_response",
+                        action_name="http_response",
+                        severity="info" if is_task_success else "warning",
+                        output_data=sanitized_summary,
+                        duration_ms=duration_ms
+                    )
+
                 return {
-                    "status": result_data.get("status", "success"),
-                    "ticket_id": result_data.get("ticket_id"),
-                    "disrupted": result_data.get("disrupted", False),
+                    "status": final_task_status,
+                    "status_code": resp.status_code,
+                    "ticket_id": ticket_id_val,
+                    "disrupted": result_data.get("disrupted", not is_task_success),
                     "recovered": result_data.get("recovered", False),
                     "retries_used": result_data.get("retries_used", 0),
-                    "error": result_data.get("error"),
-                    "message": result_data.get("message", "Completed by HTTP agent"),
+                    "error": error_val or (None if is_task_success else f"External agent reported status: {status_val}"),
+                    "message": str(result_val or ("Completed by HTTP agent" if is_task_success else f"Task reported status: {status_val}")),
                     "raw_output": result_data,
                     "observability_level": self.observability_level
                 }
 
         except httpx.TimeoutException as te:
+            duration_ms = round((time.perf_counter() - dispatch_start_time) * 1000, 2)
+            timeout_msg = f"External HTTP agent timed out after {duration_ms}ms ({type(te).__name__})"
+            if hasattr(tool_invoker, "record_http_error"):
+                tool_invoker.record_http_error(
+                    action="http_timeout",
+                    error_message=timeout_msg,
+                    duration_ms=duration_ms,
+                    output_data={"url": run_url, "timeout_seconds": self.read_timeout, "duration_ms": duration_ms},
+                    severity="high"
+                )
+            elif hasattr(tool_invoker, "recorder") and hasattr(tool_invoker.recorder, "record_event"):
+                tool_invoker.current_step = getattr(tool_invoker, "current_step", 0) + 1
+                tool_invoker.recorder.record_event(
+                    step_index=tool_invoker.current_step,
+                    event_type="error",
+                    action_name="http_timeout",
+                    severity="high",
+                    output_data={"url": run_url, "timeout_seconds": self.read_timeout, "duration_ms": duration_ms},
+                    duration_ms=duration_ms,
+                    error_message=timeout_msg
+                )
+
             tool_invoker.record_decision(
                 action="http_timeout",
                 reasoning=f"External HTTP agent timed out: {str(te)}"
@@ -387,15 +640,37 @@ class HttpAgentAdapter(AgentAdapter):
                 "disrupted": True,
                 "recovered": False,
                 "error": f"HTTP Timeout contacting agent service ({type(te).__name__})",
-                "message": "External service failed to respond within configured timeout",
+                "message": f"External service failed to respond within configured timeout ({self.read_timeout}s)",
                 "observability_level": self.observability_level
             }
         except Exception as e:
-            sanitized_err = sanitize_text(str(e)) or ""
+            duration_ms = round((time.perf_counter() - dispatch_start_time) * 1000, 2)
+            sanitized_err = sanitize_text(str(e)) or "Unknown HTTP error"
             if self.secret_env_var:
                 secret_val = os.environ.get(self.secret_env_var, "")
                 if secret_val:
                     sanitized_err = sanitized_err.replace(secret_val, "[REDACTED_SECRET]")
+
+            if hasattr(tool_invoker, "record_http_error"):
+                tool_invoker.record_http_error(
+                    action="http_error",
+                    error_message=f"HTTP Agent adapter error: {sanitized_err}",
+                    duration_ms=duration_ms,
+                    output_data={"url": run_url, "error_type": type(e).__name__, "error": sanitized_err},
+                    severity="high"
+                )
+            elif hasattr(tool_invoker, "recorder") and hasattr(tool_invoker.recorder, "record_event"):
+                tool_invoker.current_step = getattr(tool_invoker, "current_step", 0) + 1
+                tool_invoker.recorder.record_event(
+                    step_index=tool_invoker.current_step,
+                    event_type="error",
+                    action_name="http_error",
+                    severity="high",
+                    output_data={"url": run_url, "error_type": type(e).__name__, "error": sanitized_err},
+                    duration_ms=duration_ms,
+                    error_message=f"HTTP Agent adapter error: {sanitized_err}"
+                )
+
             tool_invoker.record_decision(
                 action="http_error",
                 reasoning=f"HTTP Agent adapter error: {sanitized_err}"
